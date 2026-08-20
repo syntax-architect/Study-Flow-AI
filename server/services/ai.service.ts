@@ -568,9 +568,36 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
       });
       return stream;
     } catch (error: any) {
-      console.error(`[AI Engine] Secondary API stream also failed:`, error);
-      throw new Error(`AI Engine Stream Failure. Primary Error: ${(primaryError as any)?.message}. Secondary Error: ${error?.message}`);
+      console.warn(`[AI Engine] Secondary API stream also failed:`, error);
+      secondaryError = error;
     }
+
+    if (config.fallbackApiKeys && config.fallbackApiKeys.length > 0) {
+      for (let i = 0; i < config.fallbackApiKeys.length; i++) {
+        try {
+          const fallbackKey = config.fallbackApiKeys[i];
+          const fallbackClient = new OpenAI({
+            apiKey: fallbackKey,
+            baseURL: config.secondaryAiBaseUrl,
+          });
+          console.log(`[AI Engine] Attempting stream with Fallback API ${i + 1} (${modelToUse})...`);
+          const stream = await fallbackClient.chat.completions.create({
+            model: modelToUse,
+            messages: [
+              { role: 'system', content: fullSystemInstruction },
+              { role: 'system', content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================` },
+              ...processedMessages
+            ],
+            stream: true,
+          });
+          return stream;
+        } catch (error) {
+          console.error(`[AI Engine] Fallback API ${i + 1} stream failed:`, error);
+        }
+      }
+    }
+
+    throw new Error(`AI Engine Stream Failure. Primary Error: ${(primaryError as any)?.message}. Secondary Error: ${secondaryError?.message}`);
   }
 
   static async generateSolverCritic(query: string, subject: string, language: string = 'en', messages: any[] = [], onEvent?: (event: any) => void, userId?: string) {

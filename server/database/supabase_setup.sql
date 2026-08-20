@@ -22,6 +22,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
 -- Safely add is_pinned column if table already exists
 ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;
+ALTER TABLE public.chats ADD COLUMN IF NOT EXISTS is_pinned BOOLEAN DEFAULT false;
 
 -- Allow read/write access to authenticated users (and anon for development if needed)
 -- Note: You may want to restrict this further in production based on auth.uid()

@@ -8,8 +8,17 @@ import path from 'path';
 
 const router = Router();
 
-// Configure multer for file uploads
-const upload = multer({ dest: 'server/data/' });
+// Configure multer for file uploads with validation
+const upload = multer({ 
+  dest: 'server/data/',
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext !== '.md' && ext !== '.txt' && ext !== '.pdf') {
+      return cb(new Error('Only .md, .txt, and .pdf files are allowed'));
+    }
+    cb(null, true);
+  }
+});
 
 // Secure shared-secret protection
 const adminAuth = (req: Request, res: Response, next: any) => {

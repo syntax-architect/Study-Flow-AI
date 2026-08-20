@@ -41,16 +41,7 @@ export const getAuthSupabase = (token?: string) => {
     );
   }
 
-  // Fallback to service role key for trusted backend operations if no user token is available
-  if (supabaseAdminKey) {
-    return createClient(supabaseUrl, supabaseAdminKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
-  }
-
+  // Removed service role fallback to prevent RLS bypass on unauthenticated requests.
   // Fallback to anon client if nothing else is available
   return supabase;
 };

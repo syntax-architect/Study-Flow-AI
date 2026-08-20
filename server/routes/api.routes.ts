@@ -14,7 +14,7 @@ router.get('/health', getHealth);
 router.post('/solver-critic', requireAuth, solverCriticRateLimiter, handleSolverCritic);
 router.post('/audit-topic', requireAuth, solverCriticRateLimiter, handleAuditTopic);
 router.post('/chat-stream', requireAuth, solverCriticRateLimiter, handleChatStream);
-router.use('/db', dbRoutes);
+router.use('/db', requireAuth, dbRoutes);
 router.use('/admin', adminRoutes);
 
 export default router;

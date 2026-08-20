@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AiService } from '../services/ai.service';
 import { supabase, getAuthSupabase } from '../lib/supabase';
 import { appCache } from '../utils/cache';
+import crypto from 'crypto';
 
 const getClient = (req: Request) => {
   const tokenHeader = req.headers.authorization?.split(' ')[1];
@@ -152,9 +153,9 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    const crypto = require('crypto');
     const messagesHash = crypto.createHash('sha256').update(JSON.stringify(messages)).digest('hex');
-    const cacheKey = `chat_${messagesHash}`;
+    const userId = (req as any).user?.id || 'anon';
+    const cacheKey = `chat_${userId}_${messagesHash}`;
     const cachedResponse = appCache.get<string>(cacheKey);
 
     let fullAssistantContent = '';

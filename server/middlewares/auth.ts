@@ -13,7 +13,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     const supabase = getAuthSupabase(token);
     
     // Verify token with Supabase Auth
-    const { data, error } = await supabase.auth.getUser();
+    const { data, error } = await supabase.auth.getUser(token);
     
     if (error || !data.user) {
       res.status(401).json({ error: 'Unauthorized: Invalid token' });
