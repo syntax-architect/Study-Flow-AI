@@ -6,11 +6,14 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import 'katex/dist/katex.min.css';
 import './index.css';
 
-// Import your publishable key
-const PUBLISHABLE_KEY = (import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY;
+// Import your publishable key (Vercel sometimes blocks VITE_ prefix, so we allow PUBLIC_ and CLERK_ as well)
+const PUBLISHABLE_KEY = 
+  (import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY || 
+  (import.meta as any).env.PUBLIC_CLERK_PUBLISHABLE_KEY || 
+  (import.meta as any).env.CLERK_PUBLISHABLE_KEY;
 
 if (!PUBLISHABLE_KEY) {
-  throw new Error("Missing Publishable Key. Please add VITE_CLERK_PUBLISHABLE_KEY to your .env file.");
+  throw new Error("Missing Publishable Key. Please add PUBLIC_CLERK_PUBLISHABLE_KEY to your Vercel Environment Variables.");
 }
 
 createRoot(document.getElementById('root')!).render(
