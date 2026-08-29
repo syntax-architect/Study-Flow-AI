@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { m } from 'motion/react';
 import { ChatMessage } from '../../types';
-import { Bot, User, Copy, Check, Pin, PinOff, Languages, Edit2 } from 'lucide-react';
+import { Bot, User, Copy, Check, Pin, PinOff, Languages, Edit2, Volume2 } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -22,6 +23,8 @@ interface ChatMessageItemProps {
 export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeChatId, onNotify, onEditMessage }: ChatMessageItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(msg.content);
+  const { getToken } = useAuth();
+  
   const preprocessMath = (content: string) => {
     if (!content) return '';
     let processed = content;
@@ -62,12 +65,13 @@ export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeCha
   };
 
   const renderAssistantMessage = () => {
-    let textToRender = msg.content;
+    let textToRender = msg.content as any;
     try {
-      const parsed = JSON.parse(msg.content);
-      if (parsed.criticAuditStatus) {
-        return (
-          <div className="relative">
+      const parsed = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.criticAuditStatus) {
+          return (
+            <div className="relative">
             <button
               onClick={() => onTogglePin(msg.id, msg.is_pinned)}
               className="absolute -top-3 -right-2 z-10 p-1.5 bg-white dark:bg-[#27272A] border border-black/10 dark:border-white/10 shadow-sm rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
@@ -75,23 +79,27 @@ export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeCha
             >
               {msg.is_pinned ? <PinOff className="w-3.5 h-3.5 text-amber-500" /> : <Pin className="w-3.5 h-3.5 text-zinc-900 dark:text-zinc-50 opacity-50 hover:opacity-100" />}
             </button>
-            <DualAiResponseView 
-              data={parsed} 
-              preprocessMath={preprocessMath} 
-              userId={userId}
-              chatId={activeChatId}
-              messageId={msg.id}
-              onNotify={onNotify}
-            />
-          </div>
-        );
-      }
-      if (parsed.isConversation || parsed.content) {
-        textToRender = parsed.content || msg.content;
-      }
-    } catch (e) {
-      // Fallback for non-JSON or older string messages
-    }
+        <DualAiResponseView 
+          data={parsed} 
+          preprocessMath={preprocessMath} 
+          userId={userId}
+          chatId={activeChatId}
+          messageId={msg.id}
+          onNotify={onNotify}
+        />
+      </div>
+    );
+  }
+  if (parsed.isConversation || parsed.content) {
+    textToRender = parsed.content || msg.content;
+  }
+}
+} catch (e) {
+// Fallback for non-JSON or older string messages
+if (typeof msg.content === 'object') {
+  textToRender = JSON.stringify(msg.content);
+}
+}
     
     return (
       <div className={`bg-[#FAFAFA] dark:bg-[#18181B] border border-black/5 dark:border-white/5 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4 text-[14px] text-gray-800 dark:text-gray-200 leading-relaxed prose prose-sm max-w-none prose-p:leading-relaxed overflow-x-auto relative group ${msg.is_pinned ? 'ring-2 ring-amber-400 dark:ring-amber-500/50' : ''}`}>
@@ -103,6 +111,35 @@ export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeCha
           >
             <Languages className="w-3.5 h-3.5 text-zinc-900 dark:text-zinc-50" />
           </button>
+          <button
+            onClick={async () => {
+              onNotify?.("Preparing audio playback...", "info");
+              try {
+                const token = await getToken();
+                const res = await fetch('/api/text-to-speech', {
+                  method: 'POST',
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                  },
+                  body: JSON.stringify({ 
+                    text: textToRender, 
+                    language: localStorage.getItem('preferred_language') || 'en' 
+                  })
+                });
+                if (!res.ok) throw new Error('Audio fetch failed');
+                const blob = await res.blob();
+                const audio = new Audio(URL.createObjectURL(blob));
+                audio.play();
+              } catch (e) {
+                onNotify?.("Failed to play audio", "error");
+              }
+            }}
+            className="p-1.5 text-zinc-900 dark:text-zinc-50 opacity-50 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-all flex items-center gap-1"
+            title="Read Aloud (Bhashini TTS)"
+          >
+            <Volume2 className="w-3.5 h-3.5" />
+          </button>
           <CopyButton text={textToRender} />
           <button
             onClick={() => onTogglePin(msg.id, msg.is_pinned)}
@@ -112,9 +149,10 @@ export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeCha
             {msg.is_pinned ? <PinOff className="w-3.5 h-3.5 text-amber-500" /> : <Pin className="w-3.5 h-3.5" />}
           </button>
         </div>
-        <ReactMarkdown 
-          remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+        <div className="prose dark:prose-invert prose-zinc max-w-none prose-p:leading-relaxed prose-pre:p-0 prose-math">
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
           components={{
             code({node, className, children, ...props}: any) {
               const match = /language-(\w+)/.exec(className || '');
@@ -141,6 +179,7 @@ export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeCha
         >
           {preprocessMath(textToRender)}
         </ReactMarkdown>
+        </div>
       </div>
     );
   };

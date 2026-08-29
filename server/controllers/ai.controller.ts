@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { AiService } from '../services/ai.service';
+import { BhashiniService } from '../services/bhashini.service';
 import { supabase, getAuthSupabase } from '../lib/supabase';
 import { appCache } from '../utils/cache';
+import OpenAI from 'openai';
 import crypto from 'crypto';
 
 const getClient = (req: Request) => {
@@ -17,7 +19,24 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       return res.status(400).json({ error: 'Query is required' });
     }
 
+    const token = req.headers.authorization?.split(' ')[1];
     const isStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
+
+    // Prevent LLM from imitating our internal JSON response structure
+    const sanitizedMessages = messages.map((m: any) => {
+      if (!m) return m;
+      if (m.role === 'assistant' && typeof m.content === 'string') {
+        try {
+          const parsed = JSON.parse(m.content);
+          return { ...m, content: parsed.content || m.content };
+        } catch (e) {
+          return m;
+        }
+      } else if (m.role === 'assistant' && m.content && typeof m.content === 'object') {
+        return { ...m, content: m.content.content || JSON.stringify(m.content) };
+      }
+      return m;
+    });
 
     let finalResponse: any;
 
@@ -25,6 +44,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders();
 
       const onEvent = (eventData: any) => {
         if (eventData.type === 'solver_draft') {
@@ -43,7 +63,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         }
       };
 
-      const resultData = await AiService.generateSolverCritic(query, subject, language, messages, onEvent, userId);
+      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, onEvent, userId, token);
       
       finalResponse = {
         id: 'sol-' + Date.now(),
@@ -52,11 +72,55 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         ...resultData,
         timestamp: new Date().toISOString(),
       };
+
+      // Save user message to DB // FIX: Bug 6
+      if (chatId && finalResponse) { // FIX: Bug 6
+        console.log(`[AI Controller] Saving user message to chat ${chatId}`);
+        const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
+          chat_id: chatId, // FIX: Bug 6
+          role: 'user', // FIX: Bug 6
+          content: query // FIX: Bug 6
+        }]); // FIX: Bug 6
+        if (userErr) {
+          console.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
+        } else {
+          console.log("[AI Controller] User message saved successfully.");
+        }
+      } // FIX: Bug 6
+
+      // Save assistant message to DB (stringified JSON)
+      if (chatId && finalResponse) {
+        console.log(`[AI Controller] Saving assistant message to chat ${chatId}`);
+        const { error: astErr } = await getClient(req).from('messages').insert([{
+          chat_id: chatId,
+          role: 'assistant',
+          content: JSON.stringify(finalResponse)
+        }]);
+        if (astErr) {
+          console.error("[AI Controller] Error saving assistant message:", astErr);
+        } else {
+          console.log("[AI Controller] Assistant message saved successfully.");
+        }
+      }
+
+      // Upsert mastery
+      if (userId && finalResponse && !finalResponse.isConversation) {
+        const topicTitle = finalResponse.citation?.chapter || 'Unknown Topic';
+        const topicId = topicTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const isVerified = finalResponse.criticAuditStatus === 'VERIFIED';
+        const { error: masteryErr } = await getClient(req).rpc('upsert_topic_mastery', {
+          p_user_id: userId,
+          p_topic_id: topicId,
+          p_topic_title: topicTitle,
+          p_is_verified: isVerified
+        });
+        if (masteryErr) console.error("Error upserting mastery:", masteryErr);
+      }
 
       res.write(`event: critic_verdict\ndata: ${JSON.stringify(finalResponse)}\n\n`);
       res.end();
     } else {
-      const resultData = await AiService.generateSolverCritic(query, subject, language, messages, undefined, userId);
+      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, undefined, userId, token);
       
       finalResponse = {
         id: 'sol-' + Date.now(),
@@ -65,41 +129,52 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         ...resultData,
         timestamp: new Date().toISOString(),
       };
+
+      // Save user message to DB // FIX: Bug 6
+      if (chatId && finalResponse) { // FIX: Bug 6
+        console.log(`[AI Controller] Saving user message to chat ${chatId} (non-stream)`);
+        const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
+          chat_id: chatId, // FIX: Bug 6
+          role: 'user', // FIX: Bug 6
+          content: query // FIX: Bug 6
+        }]); // FIX: Bug 6
+        if (userErr) {
+          console.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
+        } else {
+          console.log("[AI Controller] User message saved successfully.");
+        }
+      } // FIX: Bug 6
+
+      // Save assistant message to DB (stringified JSON)
+      if (chatId && finalResponse) {
+        console.log(`[AI Controller] Saving assistant message to chat ${chatId} (non-stream)`);
+        const { error: astErr } = await getClient(req).from('messages').insert([{
+          chat_id: chatId,
+          role: 'assistant',
+          content: JSON.stringify(finalResponse)
+        }]);
+        if (astErr) {
+          console.error("[AI Controller] Error saving assistant message:", astErr);
+        } else {
+          console.log("[AI Controller] Assistant message saved successfully.");
+        }
+      }
+
+      // Upsert mastery
+      if (userId && finalResponse && !finalResponse.isConversation) {
+        const topicTitle = finalResponse.citation?.chapter || 'Unknown Topic';
+        const topicId = topicTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const isVerified = finalResponse.criticAuditStatus === 'VERIFIED';
+        const { error: masteryErr } = await getClient(req).rpc('upsert_topic_mastery', {
+          p_user_id: userId,
+          p_topic_id: topicId,
+          p_topic_title: topicTitle,
+          p_is_verified: isVerified
+        });
+        if (masteryErr) console.error("Error upserting mastery:", masteryErr);
+      }
+
       res.json(finalResponse);
-    }
-
-    // Save user message to DB // FIX: Bug 6
-    if (chatId && finalResponse) { // FIX: Bug 6
-      const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
-        chat_id: chatId, // FIX: Bug 6
-        role: 'user', // FIX: Bug 6
-        content: query // FIX: Bug 6
-      }]); // FIX: Bug 6
-      if (userErr) console.error("Error saving user message:", userErr); // FIX: Bug 6
-    } // FIX: Bug 6
-
-    // Save assistant message to DB (stringified JSON)
-    if (chatId && finalResponse) {
-      const { error: astErr } = await getClient(req).from('messages').insert([{
-        chat_id: chatId,
-        role: 'assistant',
-        content: JSON.stringify(finalResponse)
-      }]);
-      if (astErr) console.error("Error saving assistant message:", astErr);
-    }
-
-    // Upsert mastery
-    if (userId && finalResponse && !finalResponse.isConversation) {
-      const topicTitle = finalResponse.citation?.chapter || 'Unknown Topic';
-      const topicId = topicTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      const isVerified = finalResponse.criticAuditStatus === 'VERIFIED';
-      const { error: masteryErr } = await getClient(req).rpc('upsert_topic_mastery', {
-        p_user_id: userId,
-        p_topic_id: topicId,
-        p_topic_title: topicTitle,
-        p_is_verified: isVerified
-      });
-      if (masteryErr) console.error("Error upserting mastery:", masteryErr);
     }
 
   } catch (err: any) {
@@ -124,7 +199,8 @@ export const handleAuditTopic = async (req: Request, res: Response, next: NextFu
       return res.status(400).json({ error: 'topicTitle and unit are required' });
     }
 
-    const resultData = await AiService.generateTopicAudit(topicTitle, subtitle || '', unit, req.body.userId);
+    const token = req.headers.authorization?.split(' ')[1];
+    const resultData = await AiService.generateTopicAudit(topicTitle, subtitle || '', unit, req.body.userId, token);
     res.json(resultData);
   } catch (err) {
     next(err);
@@ -157,6 +233,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
     const userId = (req as any).user?.id || 'anon';
     const cacheKey = `chat_${userId}_${messagesHash}`;
     const cachedResponse = appCache.get<string>(cacheKey);
+    const token = req.headers.authorization?.split(' ')[1];
 
     let fullAssistantContent = '';
 
@@ -164,7 +241,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
       fullAssistantContent = cachedResponse;
       res.write(`data: ${JSON.stringify({ content: cachedResponse })}\n\n`);
     } else {
-      const stream = await AiService.streamChat(messages, systemInstruction, { subject }); // FIX: Bug 5
+      const stream = await AiService.streamChat(messages, systemInstruction, { subject }, userId, token); // FIX: Bug 5
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || '';
         if (content) {
@@ -174,9 +251,6 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
       }
       appCache.set(cacheKey, fullAssistantContent, 3600 * 24); // Cache for 24 hours
     }
-
-    res.write('data: [DONE]\n\n');
-    res.end();
 
     // Save messages to DB now that AI generated a response
     if (chatId) {
@@ -198,6 +272,9 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
         if (astErr) console.error("Error saving assistant message:", astErr);
       }
     }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
 
   } catch (err: any) {
     if (res.headersSent) {
@@ -221,8 +298,9 @@ export const handleVoiceTranscribe = async (req: Request, res: Response, next: N
 
     const fs = require('fs');
     const filePath = req.file.path;
+    const language = req.body.language || 'en';
 
-    const transcription = await AiService.transcribeAudio(filePath);
+    const transcription = await BhashiniService.transcribeAudio(filePath, language);
 
     // Clean up the temporary file
     fs.unlink(filePath, (err: NodeJS.ErrnoException | null) => {
@@ -232,6 +310,24 @@ export const handleVoiceTranscribe = async (req: Request, res: Response, next: N
     res.json({ text: transcription });
   } catch (err: any) {
     console.error('Voice transcription error:', err);
+    next(err);
+  }
+};
+
+export const handleTextToSpeech = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { text, language } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required for TTS' });
+    }
+
+    const audioBuffer = await BhashiniService.textToSpeech(text, language || 'en');
+    
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', audioBuffer.length);
+    res.send(audioBuffer);
+  } catch (err: any) {
+    console.error('TTS error:', err);
     next(err);
   }
 };
@@ -249,5 +345,49 @@ export const handleVisionOCR = async (req: Request, res: Response, next: NextFun
   } catch (err: any) {
     console.error('Vision OCR Error:', err);
     res.status(500).json({ error: err.message || 'Failed to process image' });
+  }
+};
+
+export const handleStudyRoomModerate = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { messages, currentParticipants } = req.body;
+    
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'messages array cannot be empty' });
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    
+    if (!lastMessage.content.includes('?') && lastMessage.content.length < 15) {
+       return res.json({ response: null }); 
+    }
+
+    const otherParticipants = currentParticipants.filter((p: string) => p !== lastMessage.name);
+    
+    if (otherParticipants.length === 0) {
+       return res.json({ response: "I see you're asking a question! Let's wait a moment to see if anyone else joins the room who might know the answer, or I can help if you want!" });
+    }
+
+    const randomPeer = otherParticipants[Math.floor(Math.random() * otherParticipants.length)];
+
+    const prompt = `You are a Study Room AI Moderator. You are in a chat room with multiple students.
+Student "${lastMessage.name}" just asked: "${lastMessage.content}"
+Other students in the room: ${otherParticipants.join(', ')}.
+
+Your goal is to encourage peer-to-peer learning. Do NOT answer the question directly. 
+Instead, acknowledge the question and explicitly ask "${randomPeer}" (or anyone else) if they want to try answering it first. 
+Keep your response under 3 sentences, very friendly, and engaging.`;
+
+    const openai = new OpenAI();
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "system", content: prompt }],
+      temperature: 0.7,
+      max_tokens: 150
+    });
+
+    res.json({ response: response.choices[0].message.content });
+  } catch (err) {
+    next(err);
   }
 };

@@ -3,21 +3,12 @@ import { Request, Response } from 'express';
 
 // Intelligent key generator prioritizes authenticated user IDs, then falls back to IP
 const intelligentKeyGenerator = (req: Request, res: Response): string => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split(' ')[1];
-      const payloadBase64 = token.split('.')[1];
-      if (payloadBase64) {
-        const payload = JSON.parse(Buffer.from(payloadBase64, 'base64').toString('utf8'));
-        if (payload && payload.sub) {
-          return `user_${payload.sub}`;
-        }
-      }
-    }
-  } catch (e) {
-    // Ignore decode errors and fall back to IP
+  // Use the verified user ID injected by requireAuth middleware
+  const verifiedUserId = (req as any).user?.id || req.body?.userId;
+  if (verifiedUserId) {
+    return `user_${verifiedUserId}`;
   }
+  
   // @ts-ignore
   return ipKeyGenerator(req, res);
 };

@@ -1,13 +1,11 @@
 import React from 'react';
-import { TabType } from '../../types';
-import { Compass, MessageSquare, Archive, BarChart2, CheckCircle2, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Compass, MessageSquare, Archive, BarChart2, CheckCircle2, Settings, ChevronLeft, ChevronRight, Activity, Users } from 'lucide-react';
 import { m } from 'motion/react';
 import { playSound } from '../../utils/sound';
 import { UserButton, useUser } from '@clerk/clerk-react';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 
 interface NavbarProps {
-  activeTab: TabType;
-  onTabChange: (tab: TabType) => void;
   soundEnabled?: boolean;
   onOpenSettings?: () => void;
   isCollapsed?: boolean;
@@ -15,17 +13,22 @@ interface NavbarProps {
   isTeacherMode?: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChange, soundEnabled = true, onOpenSettings, isCollapsed, onToggleCollapse, isTeacherMode }) => {
+export const Navbar: React.FC<NavbarProps> = React.memo(({ soundEnabled = true, onOpenSettings, isCollapsed, onToggleCollapse, isTeacherMode }) => {
   const { user } = useUser();
-  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
-    { id: 'hub', label: 'Hub', icon: <Compass className="w-[18px] h-[18px]" /> },
-    { id: 'chat', label: 'Chat', icon: <MessageSquare className="w-[18px] h-[18px]" /> },
-    { id: 'vault', label: 'Vault', icon: <Archive className="w-[18px] h-[18px]" /> },
-    { id: 'analytics', label: 'Analytics', icon: <BarChart2 className="w-[18px] h-[18px]" /> },
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  const tabs: { id: string; path: string; label: string; icon: React.ReactNode }[] = [
+    { id: 'hub', path: '/', label: 'Hub', icon: <Compass className="w-[18px] h-[18px]" /> },
+    { id: 'chat', path: '/chat', label: 'Chat', icon: <MessageSquare className="w-[18px] h-[18px]" /> },
+    { id: 'study-room', path: '/study-room', label: 'Study Room', icon: <Users className="w-[18px] h-[18px]" /> },
+    { id: 'vault', path: '/vault', label: 'Vault', icon: <Archive className="w-[18px] h-[18px]" /> },
+    { id: 'analytics', path: '/analytics', label: 'Analytics', icon: <BarChart2 className="w-[18px] h-[18px]" /> },
   ];
 
   if (isTeacherMode) {
-    tabs.push({ id: 'review', label: 'Review', icon: <CheckCircle2 className="w-[18px] h-[18px]" /> });
+    tabs.push({ id: 'intervention', path: '/intervention', label: 'Intervention', icon: <Activity className="w-[18px] h-[18px]" /> });
+    tabs.push({ id: 'review', path: '/review', label: 'Review', icon: <CheckCircle2 className="w-[18px] h-[18px]" /> });
   }
 
   return (
@@ -41,7 +44,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChang
           {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
         </button>
 
-        <div className={`flex items-center gap-2.5 px-2 cursor-pointer group ${isCollapsed ? 'justify-center' : ''}`}>
+        <Link to="/" className={`flex items-center gap-2.5 px-2 cursor-pointer group ${isCollapsed ? 'justify-center' : ''}`}>
           <m.div
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
@@ -59,20 +62,19 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChang
               </span>
             </div>
           )}
-        </div>
+        </Link>
 
         {/* Navigation Tabs */}
         <div className="flex flex-col gap-1">
           {tabs.map((tab) => {
-            const isActive = activeTab === tab.id;
+            const isActive = location.pathname === tab.path || (tab.path !== '/' && location.pathname.startsWith(tab.path));
             return (
-              <m.button
+              <Link
                 key={tab.id}
+                to={tab.path}
                 onClick={() => {
                   playSound('click', soundEnabled);
-                  onTabChange(tab.id);
                 }}
-                whileTap={{ scale: 0.98 }}
                 className={`relative flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg premium-transition select-none group text-[13px] ${
                   isActive 
                     ? 'bg-zinc-100 dark:bg-white/[0.06] text-zinc-900 dark:text-white font-semibold' 
@@ -85,7 +87,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChang
                   <div className="flex-shrink-0">{tab.icon}</div>
                   {!isCollapsed && <span className="tracking-wide">{tab.label}</span>}
                 </div>
-              </m.button>
+              </Link>
             );
           })}
         </div>
@@ -94,13 +96,13 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChang
       {/* Mobile Layout (Bottom Bar) */}
       <div className="md:hidden w-full flex items-center justify-around">
         {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
+          const isActive = location.pathname === tab.path || (tab.path !== '/' && location.pathname.startsWith(tab.path));
           return (
-            <button
+            <Link
               key={tab.id}
+              to={tab.path}
               onClick={() => {
                 playSound('click', soundEnabled);
-                onTabChange(tab.id);
               }}
               className={`flex flex-col items-center justify-center p-2 rounded-lg premium-transition ${
                 isActive ? 'text-zinc-900 dark:text-white' : 'text-zinc-400'
@@ -108,7 +110,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChang
             >
               <div className="mb-0.5">{tab.icon}</div>
               <span className="text-[10px] font-semibold">{tab.label}</span>
-            </button>
+            </Link>
           );
         })}
       </div>

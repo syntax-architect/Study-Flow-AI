@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { m, AnimatePresence } from 'motion/react';
+import { SEO } from '../components/common/SEO';
 
 import { Bot, User, Send, RefreshCw, Copy, Check, CheckCircle2, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square, AudioLines } from 'lucide-react';
 import { playSound } from '../utils/sound';
@@ -58,7 +59,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setMessages(prev => prev.map(m => m.id === messageId ? { ...m, is_pinned: newStatus } : m));
     
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       await fetch(`/api/db/messages/${messageId}/pin`, {
         method: 'PATCH',
         headers: {
@@ -81,7 +82,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, title: editChatTitle } : c));
     setEditingChatId(null);
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       await fetch(`/api/db/chats/${chatId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -96,7 +97,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     const newStatus = !currentPinStatus;
     setChats(prev => prev.map(c => c.id === chatId ? { ...c, is_pinned: newStatus } : c));
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       await fetch(`/api/db/chats/${chatId}/pin`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -115,7 +116,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       setMessages([]);
     }
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       await fetch(`/api/db/chats/${chatId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
@@ -165,8 +166,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
           try {
             const formData = new FormData();
             formData.append('audio', audioBlob, 'audio.webm');
+            formData.append('language', language);
             
-            const token = await getToken({ template: 'supabase' });
+            const token = await getToken();
             const res = await fetch('/api/voice-transcribe', {
               method: 'POST',
               headers: {
@@ -252,7 +254,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     const fetchChats = async () => {
       if (!userId) return;
       try {
-        const token = await getToken({ template: 'supabase' });
+        const token = await getToken();
         const res = await fetch(`/api/db/chats/user/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -288,7 +290,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       }
       
       try {
-        const token = await getToken({ template: 'supabase' });
+        const token = await getToken();
         const res = await fetch(`/api/db/chats/${activeChatId}/messages`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -329,7 +331,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     setIsProcessingImage(true);
 
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       const formData = new FormData();
       formData.append('image', file);
 
@@ -391,7 +393,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     if (!currentChatId) {
       try {
         const title = queryToUse.length > 30 ? queryToUse.substring(0, 30) + '...' : queryToUse;
-        const token = await getToken({ template: 'supabase' });
+        const token = await getToken();
         const res = await fetch('/api/db/chats', {
           method: 'POST',
           headers: { 
@@ -429,7 +431,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
     abortControllerRef.current = new AbortController();
 
     try {
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       const response = await fetch('/api/solver-critic?stream=true', {
         method: 'POST',
         headers: { 
@@ -581,7 +583,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
   return (
     <div className="flex flex-1 min-h-0 w-full overflow-hidden relative transition-all duration-300">
-      
+      <SEO title="Chat" description="Chat with the Dual-AI Solver and Critic." />
       {/* Mobile Sidebar Toggle */}
       <button 
         onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -595,7 +597,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         absolute md:static inset-y-0 left-0 z-40 w-60 bg-zinc-50 dark:bg-[#1E1F20] flex flex-col transition-transform duration-300 ease-in-out pt-16 md:pt-4
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
-        <div className="px-4 py-2 flex items-center gap-2 mb-4">
+        <div className="px-4 py-2 flex items-center gap-2 mb-4 md:hidden">
           <div className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-white/[0.06] border border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
             <img src="/logo.jpg" alt="StudyFlow AI" className="w-full h-full object-cover" />
           </div>
@@ -828,9 +830,11 @@ export const ChatView: React.FC<ChatViewProps> = ({
         {/* Input Container */}
         <div className="px-4 md:px-8 pt-3 pb-6 md:pb-8 w-full max-w-3xl mx-auto flex flex-col items-center">
           <div className="w-full bg-zinc-100 dark:bg-[#1E1F20] rounded-[32px] p-2 pr-4 shadow-sm relative transition-all focus-within:ring-2 focus-within:ring-white/10 flex flex-col">
-            {/* Subject Selector */}
+            {/* Context & Language Selectors */}
             <div className="px-3 pt-2 pb-1 border-b border-black/5 dark:border-white/5 mx-2 mb-1 flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Subject Context</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Subject Context</span>
               <select
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
@@ -840,6 +844,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 <option value="NCERT Class 11 Chemistry">Chemistry (Class 11)</option>
                 <option value="NCERT Class 11 Mathematics">Mathematics (Class 11)</option>
               </select>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">🌐 Language</span>
+                <select
+                  value={language}
+                  onChange={(e) => {
+                    setLanguage(e.target.value);
+                    localStorage.setItem('preferred_language', e.target.value);
+                  }}
+                  className="bg-transparent dark:bg-[#1E1F20] text-xs font-semibold text-zinc-700 dark:text-zinc-200 focus:outline-none cursor-pointer text-right"
+                >
+                  <option value="en">English</option>
+                  <option value="hi">हिंदी (Hindi)</option>
+                  <option value="bn">বাংলা (Bengali)</option>
+                  <option value="ta">தமிழ் (Tamil)</option>
+                  <option value="mr">मराठी (Marathi)</option>
+                </select>
+              </div>
             </div>
 
             {/* Demo Preset Chips - only show on empty chat */}
@@ -851,9 +874,19 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   visible: { transition: { staggerChildren: 0.1 } },
                   hidden: {}
                 }}
-                className="absolute bottom-full mb-4 left-0 flex items-center justify-center w-full gap-2 overflow-x-auto px-4 scrollbar-none"
+                className="absolute bottom-full mb-4 left-0 flex flex-col items-center justify-center w-full gap-4 px-4"
               >
-                {presetQueries.map((preset, idx) => (
+                <m.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
+                  <h2 className="text-xl md:text-2xl font-bold text-zinc-800 dark:text-zinc-100 mb-1 text-center">
+                    What would you like to learn today?
+                  </h2>
+                  <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center">
+                    Ask a question, upload a problem, or start a derivation.
+                  </p>
+                </m.div>
+
+                <div className="flex flex-wrap items-center justify-center gap-2 overflow-x-auto w-full scrollbar-none">
+                  {presetQueries.map((preset, idx) => (
                   <m.button
                     variants={{
                       hidden: { opacity: 0, y: 10, scale: 0.9 },
@@ -872,6 +905,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                     {preset.label}
                   </m.button>
                 ))}
+                </div>
               </m.div>
             )}
 

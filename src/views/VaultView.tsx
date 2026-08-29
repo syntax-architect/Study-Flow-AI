@@ -5,6 +5,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { playSound } from '../utils/sound';
 
 import { ToastType } from '../components/common/Toast';
+import { SEO } from '../components/common/SEO';
 
 interface VaultViewProps {
   problems: VaultProblem[];
@@ -52,6 +53,7 @@ export const VaultView: React.FC<VaultViewProps> = ({ problems, soundEnabled = t
   if (!activeProblem) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center">
+        <SEO title="Vault" />
         <Compass className="w-12 h-12 text-gray-300 mb-4" />
         <h3 className="text-lg font-semibold text-gray-500">No Problems Found</h3>
         <p className="text-gray-400">Add problems to your vault to see them here.</p>
@@ -61,6 +63,7 @@ export const VaultView: React.FC<VaultViewProps> = ({ problems, soundEnabled = t
 
   return (
     <div className="pt-4 px-4 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto space-y-6">
+      <SEO title="Vault" description="Your saved problems and simulations vault." />
       {/* Problem Selector Bar */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs scrollbar-none">
         <span className="text-zinc-900 dark:text-zinc-50 opacity-80 font-semibold flex-shrink-0">Problem Vault:</span>

@@ -14,6 +14,8 @@ interface HubViewProps {
   onNotify: (msg: string, type: ToastType) => void;
 }
 
+import { SEO } from '../components/common/SEO';
+
 /* ── Premium Reusable Card Wrapper (Double-Bezel) ── */
 const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <div className={`group relative rounded-[2rem] bg-zinc-50 dark:bg-[#0E0E10] border border-black/5 dark:border-white/10 p-2 overflow-hidden hover:shadow-xl transition-all duration-700 ${className}`}>
@@ -43,7 +45,7 @@ export const HubView: React.FC<HubViewProps> = ({
     const fetchData = async () => {
       if (!userId) return;
       try {
-        const token = await getToken({ template: 'supabase' });
+        const token = await getToken();
         const res = await fetch(`/api/db/mastery/${userId}`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
           const data = await res.json();
@@ -104,6 +106,7 @@ export const HubView: React.FC<HubViewProps> = ({
 
   return (
     <div className="pt-8 md:pt-16 px-4 md:px-6 max-w-5xl mx-auto space-y-10 pb-32">
+      <SEO title="Hub" description="Your active studies and mastery dashboard." />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

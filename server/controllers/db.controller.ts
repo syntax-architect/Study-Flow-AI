@@ -124,11 +124,17 @@ export const getCohortAnalytics = async (req: Request, res: Response, next: Next
     const { data: totalQueries, error: countError } = await supabase.rpc('get_total_queries');
     if (countError) console.warn('Supabase error getting total queries:', countError.message);
 
+    const total = totalQueries || 0;
+    const rate = overallVerifiedRate || 0;
+    const verifiedCount = Math.round((rate / 100) * total);
+    const criticCaughtErrors = total - verifiedCount;
+
     res.json({
       cohorts: formattedCohorts,
       globalStats: {
-        overallVerifiedRate: overallVerifiedRate || 0,
-        totalQueries: totalQueries || 0
+        overallVerifiedRate: rate,
+        totalQueries: total,
+        criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0
       }
     });
   } catch (err) {
@@ -206,11 +212,17 @@ export const getPersonalCohortAnalytics = async (req: Request, res: Response, ne
       .select('*', { count: 'exact', head: true })
       .eq('role', 'user');
 
+    const totalQs = totalQueries || 0;
+    const rate = overallVerifiedRate || 0;
+    const verifiedCount = Math.round((rate / 100) * totalQs);
+    const criticCaughtErrors = totalQs - verifiedCount;
+
     res.json({
       cohorts: formattedCohorts,
       globalStats: {
         overallVerifiedRate,
-        totalQueries: totalQueries || 0
+        totalQueries: totalQs,
+        criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0
       }
     });
   } catch (err) {
@@ -412,6 +424,62 @@ export const resolveReview = async (req: Request, res: Response, next: NextFunct
 
     if (error) throw error;
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getFlaggedStudents = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const client = getClient(req);
+    
+    // We fetch all mastery records that indicate struggling
+    const { data, error } = await client
+      .from('user_topic_mastery')
+      .select('*');
+
+    if (error) {
+      console.warn('Supabase error in getFlaggedStudents:', error.message);
+      return res.json([]);
+    }
+
+    // Process and group by user_id
+    const flaggedUsers = new Map<string, any>();
+
+    (data || []).forEach((row: any) => {
+      const totalAttempts = row.verified_count + row.flagged_count;
+      const successRate = totalAttempts > 0 ? (row.verified_count / totalAttempts) : 1;
+      
+      // Criteria for struggling: success rate <= 0.6 AND at least 2 flagged attempts OR strictly flagged > 2
+      if ((successRate <= 0.6 && row.flagged_count >= 2) || row.flagged_count > 2) {
+        if (!flaggedUsers.has(row.user_id)) {
+          // We can use a mock name based on user_id suffix since we don't store PII in this table
+          const mockName = `Student ${row.user_id.substring(0, 5).toUpperCase()}`;
+          flaggedUsers.set(row.user_id, {
+            userId: row.user_id,
+            name: mockName,
+            riskScore: 0,
+            failedTopics: []
+          });
+        }
+        
+        const user = flaggedUsers.get(row.user_id);
+        user.failedTopics.push({
+          topicId: row.topic_id,
+          title: row.topic_title || row.topic_id,
+          flaggedCount: row.flagged_count,
+          verifiedCount: row.verified_count
+        });
+        
+        // Increase risk score heavily based on flagged counts
+        user.riskScore += row.flagged_count * 10;
+      }
+    });
+
+    // Sort by highest risk score
+    const result = Array.from(flaggedUsers.values()).sort((a, b) => b.riskScore - a.riskScore);
+    
+    res.json(result);
   } catch (err) {
     next(err);
   }

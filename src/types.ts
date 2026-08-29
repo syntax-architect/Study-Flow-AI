@@ -1,4 +1,4 @@
-export type TabType = 'hub' | 'chat' | 'vault' | 'analytics' | 'review';
+export type TabType = 'hub' | 'chat' | 'vault' | 'analytics' | 'review' | 'intervention' | 'study-room';
 
 export interface ChatMessage {
   id: string;
@@ -115,3 +115,25 @@ export interface UnitOverview {
   topics: TopicMastery[];
 }
 
+export interface FlaggedTopic {
+  topicId: string;
+  title: string;
+  flaggedCount: number;
+  verifiedCount: number;
+}
+
+export interface FlaggedStudent {
+  userId: string;
+  name: string;
+  riskScore: number;
+  failedTopics: FlaggedTopic[];
+}
+
+export interface StudyRoomMessage {
+  id: string;
+  user_id: string;
+  name: string;
+  content: string;
+  timestamp: string;
+  isAI?: boolean;
+}

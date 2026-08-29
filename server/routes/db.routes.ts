@@ -3,7 +3,7 @@ import {
   getUserChats, createChat, getChatMessages, 
   getUserMastery, getCohortAnalytics, getPersonalCohortAnalytics, getRecommendations,
   deleteChat, deleteAllUserChats, renameChat, toggleMessagePin, flagForReview, toggleChatPin,
-  getReviewQueue, resolveReview
+  getReviewQueue, resolveReview, getFlaggedStudents
 } from '../controllers/db.controller';
 
 const router = Router();
@@ -23,5 +23,6 @@ router.get('/recommendations/:userId', getRecommendations);
 router.post('/flag-for-review', flagForReview);
 router.get('/review-queue', getReviewQueue);
 router.post('/review-queue/:reviewId/resolve', resolveReview);
+router.get('/intervention/flagged-students', getFlaggedStudents);
 
 export default router;

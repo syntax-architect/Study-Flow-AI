@@ -4,7 +4,7 @@ import { appCache } from '../utils/cache';
 import fs from 'fs';
 import path from 'path';
 import { getExtractor } from '../utils/pipeline';
-import { supabase } from '../lib/supabase';
+import { supabase, getAuthSupabase } from '../lib/supabase';
 import { evaluate } from 'mathjs';
 
 const MASTER_SYSTEM_PROMPT = `You are StudyFlow AI, an elite academic study assistant. You operate using a Dual-Engine architecture (Solver and Critic). Your primary goal is to guide students to mastery through rigorous pedagogy.
@@ -46,6 +46,23 @@ export class AiService {
     });
   }
 
+  private static getClientForProvider(provider: string) {
+    if (provider.toLowerCase() === 'groq') {
+      if (!config.groqApiKey) throw new Error('Missing GROQ_API_KEY');
+      return new OpenAI({ apiKey: config.groqApiKey, baseURL: config.groqBaseUrl });
+    } else if (provider.toLowerCase() === 'openrouter') {
+      if (!config.openrouterApiKey) throw new Error('Missing OPENROUTER_API_KEY');
+      return new OpenAI({ apiKey: config.openrouterApiKey, baseURL: config.openrouterBaseUrl });
+    } else {
+      if (!config.primaryAiApiKey) throw new Error(`Missing API key for provider ${provider}`);
+      return new OpenAI({ apiKey: config.primaryAiApiKey, baseURL: config.primaryAiBaseUrl });
+    }
+  }
+
+  private static async sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
   private static cosineSimilarity(vecA: number[], vecB: number[]): number {
     let dotProduct = 0;
     let normA = 0;
@@ -59,7 +76,7 @@ export class AiService {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
-  private static async executeLoop(client: OpenAI, model: string, messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>) {
+  private static async executeLoop(client: OpenAI, model: string, messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>, token?: string) {
     let currentMessages = [...messages];
 
     while (true) {
@@ -94,7 +111,8 @@ export class AiService {
           }
         }
         if (userId && endpoint && tokensUsed > 0) { // FIX: Bug 1
-          supabase.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => { // FIX: Bug 1
+          const client = token ? getAuthSupabase(token) : supabase;
+          client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => { // FIX: Bug 1
             if (error) console.error('[Usage Logger] Error:', error); // FIX: Bug 1
           }); // FIX: Bug 1
         } // FIX: Bug 1
@@ -110,7 +128,8 @@ export class AiService {
       }
 
       if (userId && endpoint && tokensUsed > 0) { // FIX: Bug 1
-        supabase.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => { // FIX: Bug 1
+        const client = token ? getAuthSupabase(token) : supabase;
+        client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => { // FIX: Bug 1
           if (error) console.error('[Usage Logger] Error:', error); // FIX: Bug 1
         }); // FIX: Bug 1
       } // FIX: Bug 1
@@ -165,7 +184,80 @@ export class AiService {
     }
   }
 
-  private static async executeWithFallback(messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>) {
+  private static async executeWithFallback(messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>, token?: string) {
+    if (config.useNewAiArchitecture) {
+      let provider = config.routerProvider;
+      let model = config.routerModel;
+
+      if (endpoint === 'solver') {
+        provider = config.solverProvider;
+        model = config.solverModel;
+      } else if (endpoint === 'critic') {
+        provider = config.criticProvider;
+        model = config.criticModel;
+      } else if (endpoint === 'audit') {
+        provider = config.solverProvider;
+        model = config.solverModel;
+      }
+
+      let hasImage = false;
+      let hasMultilingual = false;
+
+      const hindiRegex = /[\u0900-\u097F]/;
+      const bengaliRegex = /[\u0980-\u09FF]/;
+
+      for (const msg of messages) {
+        if (typeof msg.content === 'string') {
+          if (hindiRegex.test(msg.content) || bengaliRegex.test(msg.content)) {
+            hasMultilingual = true;
+          }
+        } else if (Array.isArray(msg.content)) {
+          for (const part of msg.content) {
+            if (part.type === 'image_url') {
+              hasImage = true;
+            }
+            if (part.type === 'text' && (hindiRegex.test(part.text) || bengaliRegex.test(part.text))) {
+              hasMultilingual = true;
+            }
+          }
+        }
+      }
+
+      if (hasImage) {
+        model = config.visionAiModel;
+      } else if (hasMultilingual && endpoint !== 'critic' && endpoint !== 'solver') {
+        model = config.multilingualAiModel;
+      }
+
+      const client = this.getClientForProvider(provider);
+      const maxRetries = 3;
+      let attempt = 0;
+
+      while (attempt < maxRetries) {
+        try {
+          console.log(`[AI Engine] Attempt ${attempt + 1}/${maxRetries} with ${provider} (${model}) for ${endpoint || 'default'}...`);
+          return await this.executeLoop(client, model, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
+        } catch (error: any) {
+          console.warn(`[AI Engine] ${provider} attempt ${attempt + 1} failed:`, error.message);
+          attempt++;
+          if (attempt >= maxRetries) break;
+          const delay = Math.pow(2, attempt) * 1000;
+          await this.sleep(delay);
+        }
+      }
+
+      const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
+      const fallbackModel = fallbackProvider === 'groq' ? 'llama-3.1-8b-instant' : 'google/gemini-1.5-flash';
+      console.warn(`[AI Engine] Falling back to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'default'}...`);
+      const fallbackClient = this.getClientForProvider(fallbackProvider);
+
+      try {
+        return await this.executeLoop(fallbackClient, fallbackModel, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
+      } catch (error: any) {
+        throw new Error(`AI Engine Exhausted all retries. Final Fallback Error: ${error.message}`);
+      }
+    }
+
     let primaryError: any = null;
     let secondaryError: any = null;
 
@@ -225,7 +317,7 @@ export class AiService {
       if (!primaryApiKey) throw new Error(`Missing primary API key for endpoint: ${endpoint}`);
       const primaryClient = new OpenAI({ apiKey: primaryApiKey, baseURL: primaryBaseUrl });
       console.log(`[AI Engine] Attempting generation with Primary API (${modelToUse}) for ${endpoint || 'default'}...`);
-      return await this.executeLoop(primaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback);
+      return await this.executeLoop(primaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
     } catch (error) {
       console.warn(`[AI Engine] Primary API failed:`, error);
       primaryError = error;
@@ -235,7 +327,7 @@ export class AiService {
       if (!secondaryApiKey) throw new Error(`Missing secondary API key for endpoint: ${endpoint}`);
       const secondaryClient = new OpenAI({ apiKey: secondaryApiKey, baseURL: secondaryBaseUrl });
       console.log(`[AI Engine] Attempting generation with Secondary API (${modelToUse}) for ${endpoint || 'default'}...`);
-      return await this.executeLoop(secondaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback);
+      return await this.executeLoop(secondaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
     } catch (error) {
       console.error(`[AI Engine] Secondary API also failed:`, error);
       secondaryError = error;
@@ -250,7 +342,7 @@ export class AiService {
             baseURL: config.secondaryAiBaseUrl,
           });
           console.log(`[AI Engine] Attempting generation with Fallback API ${i + 1} (${modelToUse})...`);
-          return await this.executeLoop(fallbackClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback);
+          return await this.executeLoop(fallbackClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
         } catch (error) {
           console.error(`[AI Engine] Fallback API ${i + 1} failed:`, error);
         }
@@ -258,6 +350,141 @@ export class AiService {
     }
 
     throw new Error(`AI Engine Exhausted all keys. Primary Error: ${primaryError?.message}. Secondary Error: ${secondaryError?.message}`);
+  }
+
+  private static async executeStreamWithFallback(messages: any[], endpoint?: string, userId?: string, token?: string) {
+    let modelToUse = config.primaryAiModel;
+    let hasImage = false;
+    let hasMultilingual = false;
+
+    const hindiRegex = /[\u0900-\u097F]/;
+    const bengaliRegex = /[\u0980-\u09FF]/;
+
+    for (const msg of messages) {
+      if (typeof msg.content === 'string') {
+        if (hindiRegex.test(msg.content) || bengaliRegex.test(msg.content)) {
+          hasMultilingual = true;
+        }
+      } else if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === 'image_url') {
+            hasImage = true;
+          }
+          if (part.type === 'text' && (hindiRegex.test(part.text) || bengaliRegex.test(part.text))) {
+            hasMultilingual = true;
+          }
+        }
+      }
+    }
+
+    if (config.useNewAiArchitecture) {
+      let provider = config.conversationProvider;
+      modelToUse = config.conversationModel;
+
+      if (hasImage) {
+        modelToUse = config.visionAiModel;
+      } else if (hasMultilingual) {
+        modelToUse = config.multilingualAiModel;
+      }
+
+      const client = this.getClientForProvider(provider);
+      const maxRetries = 3;
+      let attempt = 0;
+
+      while (attempt < maxRetries) {
+        try {
+          console.log(`[AI Engine] Attempt ${attempt + 1}/${maxRetries} stream with ${provider} (${modelToUse}) for ${endpoint || 'conversation'}...`);
+          const stream = await client.chat.completions.create({
+            model: modelToUse,
+            messages,
+            stream: true,
+          });
+          return stream;
+        } catch (error: any) {
+          console.warn(`[AI Engine] ${provider} stream attempt ${attempt + 1} failed:`, error.message);
+          attempt++;
+          if (attempt >= maxRetries) break;
+          const delay = Math.pow(2, attempt) * 1000;
+          await this.sleep(delay);
+        }
+      }
+
+      const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
+      const fallbackModel = fallbackProvider === 'groq' ? 'llama-3.1-8b-instant' : 'google/gemini-1.5-flash';
+      console.warn(`[AI Engine] Falling back stream to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'conversation'}...`);
+      const fallbackClient = this.getClientForProvider(fallbackProvider);
+
+      try {
+        return await fallbackClient.chat.completions.create({
+          model: fallbackModel,
+          messages,
+          stream: true,
+        });
+      } catch (error: any) {
+        throw new Error(`AI Engine Stream Exhausted all retries. Final Fallback Error: ${error.message}`);
+      }
+    }
+
+    // Legacy mode
+    if (hasImage) {
+      modelToUse = config.visionAiModel;
+    } else if (hasMultilingual) {
+      modelToUse = config.multilingualAiModel;
+    }
+
+    let primaryError: any = null;
+    let secondaryError: any = null;
+
+    try {
+      const primaryClient = this.getPrimaryClient();
+      console.log(`[AI Engine] Attempting stream with Primary API (${modelToUse})...`);
+      const stream = await primaryClient.chat.completions.create({
+        model: modelToUse,
+        messages,
+        stream: true,
+      });
+      return stream;
+    } catch (error) {
+      console.warn(`[AI Engine] Primary API stream failed:`, error);
+      primaryError = error;
+    }
+
+    try {
+      const secondaryClient = this.getSecondaryClient();
+      console.log(`[AI Engine] Attempting stream with Secondary API (${modelToUse})...`);
+      const stream = await secondaryClient.chat.completions.create({
+        model: modelToUse,
+        messages,
+        stream: true,
+      });
+      return stream;
+    } catch (error: any) {
+      console.warn(`[AI Engine] Secondary API stream also failed:`, error);
+      secondaryError = error;
+    }
+
+    if (config.fallbackApiKeys && config.fallbackApiKeys.length > 0) {
+      for (let i = 0; i < config.fallbackApiKeys.length; i++) {
+        try {
+          const fallbackKey = config.fallbackApiKeys[i];
+          const fallbackClient = new OpenAI({
+            apiKey: fallbackKey,
+            baseURL: config.secondaryAiBaseUrl,
+          });
+          console.log(`[AI Engine] Attempting stream with Fallback API ${i + 1} (${modelToUse})...`);
+          const stream = await fallbackClient.chat.completions.create({
+            model: modelToUse,
+            messages,
+            stream: true,
+          });
+          return stream;
+        } catch (error) {
+          console.error(`[AI Engine] Fallback API ${i + 1} stream failed:`, error);
+        }
+      }
+    }
+
+    throw new Error(`AI Engine Stream Failure. Primary Error: ${(primaryError as any)?.message}. Secondary Error: ${secondaryError?.message}`);
   }
 
   static async retrieveContext(query: string, filter?: { subject?: string; chapter?: string }) {
@@ -304,7 +531,7 @@ export class AiService {
     }
   }
 
-  static async advancedRetrieveContext(query: string, historyText: string, filter?: { subject?: string; chapter?: string }, userId?: string) {
+  static async advancedRetrieveContext(query: string, historyText: string, filter?: { subject?: string; chapter?: string }, userId?: string, token?: string) {
     try {
       const expansionPrompt = `Given the user's latest question and chat history, generate 3 distinct search queries to find the most relevant information in a textbook.
 1. The first query should be the core conceptual question.
@@ -338,7 +565,11 @@ Latest Question: ${query}`;
         "query_expansion", 
         userId, 
         "rag_expansion", 
-        0.2
+        0.2,
+        undefined,
+        undefined,
+        undefined,
+        token
       );
 
       const queries = expansionRes.queries && Array.isArray(expansionRes.queries) ? expansionRes.queries : [query];
@@ -409,7 +640,11 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         "context_reranker",
         userId,
         "rag_rerank",
-        0.0
+        0.0,
+        undefined,
+        undefined,
+        undefined,
+        token
       );
 
       let finalContexts: string[] = [];
@@ -470,7 +705,7 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
     }
   }
 
-  static async streamChat(messages: any[], systemInstruction: string, filter?: { subject?: string; chapter?: string }) { // FIX: Bug 5
+  static async streamChat(messages: any[], systemInstruction: string, filter?: { subject?: string; chapter?: string }, userId?: string, token?: string) { // FIX: Bug 5
     let primaryError: any = null;
     
     let processedMessages = messages;
@@ -482,9 +717,10 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
       const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
       
       try {
-        const primaryClient = this.getPrimaryClient();
-        const summaryRes = await primaryClient.chat.completions.create({
-          model: config.primaryAiModel,
+        const client = config.useNewAiArchitecture ? this.getClientForProvider(config.routerProvider) : this.getPrimaryClient();
+        const routerModel = config.useNewAiArchitecture ? config.routerModel : config.primaryAiModel;
+        const summaryRes = await client.chat.completions.create({
+          model: routerModel,
           messages: [{ role: 'user', content: summaryPrompt }],
           max_tokens: 150,
           temperature: 0.1
@@ -523,106 +759,16 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
 
     const fullSystemInstruction = pipelineSystemInstruction;
 
-    primaryError = null;
-    let secondaryError: any = null;
+    const streamMessages = [
+      { role: 'system', content: fullSystemInstruction },
+      { role: 'system', content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================` },
+      ...processedMessages
+    ];
 
-    let modelToUse = config.primaryAiModel;
-    let hasImage = false;
-    let hasMultilingual = false;
-
-    const hindiRegex = /[\u0900-\u097F]/;
-    const bengaliRegex = /[\u0980-\u09FF]/;
-
-    for (const msg of processedMessages) {
-      if (typeof msg.content === 'string') {
-        if (hindiRegex.test(msg.content) || bengaliRegex.test(msg.content)) {
-          hasMultilingual = true;
-        }
-      } else if (Array.isArray(msg.content)) {
-        for (const part of msg.content) {
-          if (part.type === 'image_url') {
-            hasImage = true;
-          }
-          if (part.type === 'text' && (hindiRegex.test(part.text) || bengaliRegex.test(part.text))) {
-            hasMultilingual = true;
-          }
-        }
-      }
-    }
-
-    if (hasImage) {
-      modelToUse = config.visionAiModel;
-      console.log(`[AI Engine] Vision detected in stream. Switching to specialized model: ${modelToUse}`);
-    } else if (hasMultilingual) {
-      modelToUse = config.multilingualAiModel;
-      console.log(`[AI Engine] Hindi/Bengali detected in stream. Switching to specialized model: ${modelToUse}`);
-    }
-
-    try {
-      const primaryClient = this.getPrimaryClient();
-      console.log(`[AI Engine] Attempting stream with Primary API (${modelToUse})...`);
-      const stream = await primaryClient.chat.completions.create({
-        model: modelToUse,
-        messages: [
-          { role: 'system', content: fullSystemInstruction },
-          { role: 'system', content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================` },
-          ...processedMessages
-        ],
-        stream: true,
-      });
-      return stream;
-    } catch (error) {
-      console.warn(`[AI Engine] Primary API stream failed:`, error);
-      primaryError = error;
-    }
-
-    try {
-      const secondaryClient = this.getSecondaryClient();
-      console.log(`[AI Engine] Attempting stream with Secondary API (${modelToUse})...`);
-      const stream = await secondaryClient.chat.completions.create({
-        model: modelToUse,
-        messages: [
-          { role: 'system', content: fullSystemInstruction },
-          { role: 'system', content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================` },
-          ...processedMessages
-        ],
-        stream: true,
-      });
-      return stream;
-    } catch (error: any) {
-      console.warn(`[AI Engine] Secondary API stream also failed:`, error);
-      secondaryError = error;
-    }
-
-    if (config.fallbackApiKeys && config.fallbackApiKeys.length > 0) {
-      for (let i = 0; i < config.fallbackApiKeys.length; i++) {
-        try {
-          const fallbackKey = config.fallbackApiKeys[i];
-          const fallbackClient = new OpenAI({
-            apiKey: fallbackKey,
-            baseURL: config.secondaryAiBaseUrl,
-          });
-          console.log(`[AI Engine] Attempting stream with Fallback API ${i + 1} (${modelToUse})...`);
-          const stream = await fallbackClient.chat.completions.create({
-            model: modelToUse,
-            messages: [
-              { role: 'system', content: fullSystemInstruction },
-              { role: 'system', content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================` },
-              ...processedMessages
-            ],
-            stream: true,
-          });
-          return stream;
-        } catch (error) {
-          console.error(`[AI Engine] Fallback API ${i + 1} stream failed:`, error);
-        }
-      }
-    }
-
-    throw new Error(`AI Engine Stream Failure. Primary Error: ${(primaryError as any)?.message}. Secondary Error: ${secondaryError?.message}`);
+    return await this.executeStreamWithFallback(streamMessages, 'chat', userId, token);
   }
 
-  static async generateSolverCritic(query: string, subject: string, language: string = 'en', messages: any[] = [], onEvent?: (event: any) => void, userId?: string) {
+  static async generateSolverCritic(query: string, subject: string, language: string = 'en', messages: any[] = [], onEvent?: (event: any) => void, userId?: string, token?: string) {
     const languageMap: Record<string, string> = {
       'en': 'English',
       'bn': 'Bengali (Use ONLY proper Bengali script / বাংলা লিপি for ALL text. NEVER use English/Latin letters for Bengali words. No Romanized Bengali.)',
@@ -643,8 +789,10 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
           intent = 'CONVERSATION';
         } else {
           try {
-            const intentRes = await primaryClient.chat.completions.create({
-              model: config.multilingualAiModel || config.primaryAiModel, // use smarter versatile model
+            const client = config.useNewAiArchitecture ? this.getClientForProvider(config.routerProvider) : this.getPrimaryClient();
+            const routerModel = config.useNewAiArchitecture ? config.routerModel : (config.multilingualAiModel || config.primaryAiModel);
+            const intentRes = await client.chat.completions.create({
+              model: routerModel,
               messages: [
                 { role: 'system', content: 'You are a strict router. Classify the user\'s message into EXACTLY one word: "ACADEMIC" or "CONVERSATION". No punctuation or explanation.\n- Output "ACADEMIC" ONLY for complex physics, math, chemistry, or rigorous science problems that require numeric calculation, mathematical derivation, formulas, or a step-by-step analytical solver.\n- Output "CONVERSATION" for everything else, including general knowledge, writing help, coding, conceptual definitions, casual reasoning, small talk, and greetings.' },
                 { role: 'user', content: 'Solve 2x^2 + 5x - 3 = 0' },
@@ -671,19 +819,16 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
         }
 
         if (intent.includes('CONVERSATION')) {
-          const chatModelToUse = (language !== 'en' || /[\u0900-\u09FF]/.test(query)) ? config.multilingualAiModel : config.primaryAiModel;
+          const convMessages = [
+            { role: 'system', content: `You are StudyFlow AI, an advanced and highly capable AI assistant. You confidently answer general knowledge questions, write code, explain conceptual definitions, and engage in casual conversation. Respond naturally and directly in ${langName}. You are a fully capable assistant; do not force the user to study if they ask for writing help, general information, or just want to chat.` },
+            ...shortHistory,
+            { role: 'user', content: query }
+          ];
+          
           if (onEvent) {
-            const stream = await primaryClient.chat.completions.create({
-              model: chatModelToUse,
-              messages: [
-                { role: 'system', content: `You are StudyFlow AI, an advanced and highly capable AI assistant. You confidently answer general knowledge questions, write code, explain conceptual definitions, and engage in casual conversation. Respond naturally and directly in ${langName}. You are a fully capable assistant; do not force the user to study if they ask for writing help, general information, or just want to chat.` },
-                ...shortHistory,
-                { role: 'user', content: query }
-              ],
-              stream: true
-            });
+            const stream = await this.executeStreamWithFallback(convMessages, 'conversation');
             let fullText = '';
-            for await (const chunk of stream) {
+            for await (const chunk of stream as any) {
               const content = chunk.choices[0]?.delta?.content || '';
               if (content) {
                 fullText += content;
@@ -692,16 +837,15 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
             }
             return { isConversation: true, content: fullText };
           } else {
-            const convRes = await primaryClient.chat.completions.create({
-              model: chatModelToUse,
-              messages: [
-                { role: 'system', content: `You are StudyFlow AI, an advanced and highly capable AI assistant. You confidently answer general knowledge questions, write code, explain conceptual definitions, and engage in casual conversation. Respond naturally and directly in ${langName}. You are a fully capable assistant; do not force the user to study if they ask for writing help, general information, or just want to chat.` },
-                ...shortHistory,
-                { role: 'user', content: query }
-              ]
-            });
-            const content = convRes.choices[0].message.content || 'Hello! How can I help you with your studies today?';
-            return { isConversation: true, content };
+            const stream = await this.executeStreamWithFallback(convMessages, 'conversation');
+            let fullText = '';
+            for await (const chunk of stream as any) {
+              const content = chunk.choices[0]?.delta?.content || '';
+              if (content) {
+                fullText += content;
+              }
+            }
+            return { isConversation: true, content: fullText || 'Hello! How can I help you with your studies today?' };
           }
         }
       }
@@ -726,9 +870,10 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
       const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
       
       try {
-        const primaryClient = this.getPrimaryClient();
-        const summaryRes = await primaryClient.chat.completions.create({
-          model: config.primaryAiModel,
+        const client = config.useNewAiArchitecture ? this.getClientForProvider(config.routerProvider) : this.getPrimaryClient();
+        const routerModel = config.useNewAiArchitecture ? config.routerModel : config.primaryAiModel;
+        const summaryRes = await client.chat.completions.create({
+          model: routerModel,
           messages: [{ role: 'user', content: summaryPrompt }],
           max_tokens: 150,
           temperature: 0.1
@@ -1120,7 +1265,7 @@ CRITICAL RULES FOR AUDIT:
     return finalResponse;
   }
 
-  static async generateTopicAudit(topicTitle: string, subtitle: string, unit: string, userId?: string) {
+  static async generateTopicAudit(topicTitle: string, subtitle: string, unit: string, userId?: string, token?: string) {
     const schemaDescription = {
       type: "object",
       properties: {

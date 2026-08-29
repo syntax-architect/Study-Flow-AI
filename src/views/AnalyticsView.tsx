@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CohortMetric } from '../types';
+import { ToastType } from '../components/common/Toast';
+import { SEO } from '../components/common/SEO';
 import { MOCK_UNITS } from '../data/mockData';
-import { Globe, ShieldCheck, TrendingUp, ChevronUp, RefreshCw } from 'lucide-react';
+import { Globe, ShieldCheck, TrendingUp, ChevronUp, RefreshCw, Award, Medal, Star, Brain } from 'lucide-react';
+import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '@clerk/clerk-react';
 
 interface AnalyticsProps {
@@ -15,15 +18,23 @@ export const AnalyticsView: React.FC<AnalyticsProps> = ({ onNotify, isTeacherMod
     return unit ? unit.name : id;
   };
   const [cohorts, setCohorts] = useState<CohortMetric[]>([]);
-  const [globalStats, setGlobalStats] = useState({ overallVerifiedRate: 0, totalQueries: 0 });
+  const [globalStats, setGlobalStats] = useState({ overallVerifiedRate: 0, totalQueries: 0, criticCaughtErrors: 0 });
   const [loading, setLoading] = useState(true);
   const [sortField, setSortField] = useState<'meanScore' | 'participation'>('meanScore');
   const { getToken } = useAuth();
 
+  const skillData = [
+    { subject: 'Critical Thinking', A: globalStats.overallVerifiedRate > 0 ? Math.min(100, globalStats.overallVerifiedRate + 15) : 0 },
+    { subject: 'Analytical Reasoning', A: cohorts.length > 0 ? cohorts[0].meanScore : 0 },
+    { subject: 'Logical Deduction', A: cohorts.length > 0 ? cohorts[0].participation * 10 : 0 },
+    { subject: 'Conceptual Clarity', A: globalStats.overallVerifiedRate },
+    { subject: 'Problem Solving', A: Math.max(0, 100 - (globalStats.criticCaughtErrors * 2)) }
+  ];
+
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
-        const token = await getToken({ template: 'supabase' });
+        const token = await getToken();
         const url = isTeacherMode ? '/api/db/analytics/cohorts' : '/api/db/analytics/cohorts/me';
         const res = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` }
@@ -37,7 +48,7 @@ export const AnalyticsView: React.FC<AnalyticsProps> = ({ onNotify, isTeacherMod
            setCohorts(data);
         } else {
            setCohorts(data.cohorts || []);
-           setGlobalStats(data.globalStats || { overallVerifiedRate: 0, totalQueries: 0 });
+           setGlobalStats(data.globalStats || { overallVerifiedRate: 0, totalQueries: 0, criticCaughtErrors: 0 });
         }
       } catch (err) {
         console.error(err);
@@ -57,6 +68,7 @@ export const AnalyticsView: React.FC<AnalyticsProps> = ({ onNotify, isTeacherMod
 
   return (
     <div className="h-full overflow-y-auto scrollbar-none pt-4 px-4 max-w-md md:max-w-2xl lg:max-w-4xl mx-auto space-y-6">
+      <SEO title={isTeacherMode ? "Cohort Analytics" : "My Analytics"} description="View detailed mastery and cohort analytics." />
       {/* Header */}
       <div>
         <h2 className="text-2xl md:text-3xl font-serif font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
@@ -105,8 +117,26 @@ export const AnalyticsView: React.FC<AnalyticsProps> = ({ onNotify, isTeacherMod
             <ChevronUp className="w-6 h-6 text-[#2563EB] dark:text-[#60A5FA]" />
           </div>
           <span className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-50">{globalStats.totalQueries}</span>
-          <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-wider">
+          <span className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-wider text-center mt-1">
             QUERIES RUN
+          </span>
+        </div>
+      </div>
+
+      {/* Critic Interventions Card */}
+      <div className="bg-white dark:bg-[#09090b] border border-red-500/10 dark:border-red-500/20 shadow-sm rounded-[24px] p-6 flex flex-col items-center justify-center text-center space-y-3 transition-all duration-300 relative overflow-hidden">
+        <div className="absolute inset-0 bg-red-500/5 dark:bg-red-500/10 pointer-events-none"></div>
+        <div className="w-full text-left text-xs font-semibold text-zinc-900 dark:text-zinc-50 opacity-80 tracking-wider uppercase z-10">
+          Critic Interventions
+        </div>
+
+        <div className="w-36 h-36 bg-white dark:bg-[#09090b] border border-red-500/20 dark:border-red-500/30 bg-red-50/50 dark:bg-red-900/10 rounded-2xl flex flex-col items-center justify-center relative p-4 z-10 shadow-sm">
+          <div className="w-12 h-10 mb-2 flex items-center justify-center bg-red-100 dark:bg-red-900/40 rounded-full">
+            <ShieldCheck className="w-6 h-6 text-red-500 dark:text-red-400" />
+          </div>
+          <span className="text-2xl font-extrabold text-red-600 dark:text-red-400">{globalStats.criticCaughtErrors}</span>
+          <span className="text-[10px] font-bold text-red-700/70 dark:text-red-400/70 uppercase tracking-wider text-center mt-1">
+            ERRORS CAUGHT
           </span>
         </div>
       </div>
@@ -194,35 +224,105 @@ export const AnalyticsView: React.FC<AnalyticsProps> = ({ onNotify, isTeacherMod
         </div>
       </div>
 
-      {/* Topic Mastery Heatmap */}
-      <div className="bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm rounded-[24px] p-6 space-y-4 transition-all duration-300">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Topic Mastery Heatmap</h3>
-        <div className="flex flex-wrap gap-2">
-          {cohorts.length === 0 ? (
-             <div className="text-zinc-900 dark:text-zinc-50 opacity-50 text-sm">No mastery data available yet. Start solving problems!</div>
-          ) : (
-            cohorts.map(c => {
-              let bgColor = 'bg-red-500'; // Needs Attention (< 50)
-              if (c.meanScore >= 80) bgColor = 'bg-green-500'; // Mastered
-              else if (c.meanScore >= 50) bgColor = 'bg-yellow-400'; // Learning
+      {/* Earned Credentials (Badges) - Only visible if there are badges */}
+      {!isTeacherMode && cohorts.some(c => c.meanScore >= 70) && (
+        <div className="bg-white dark:bg-[#09090b] border border-yellow-500/10 shadow-sm rounded-[24px] p-6 space-y-4 transition-all duration-300">
+          <div className="flex items-center justify-between text-xs font-semibold text-zinc-900 dark:text-zinc-50 opacity-80 tracking-wider uppercase">
+            <span>Earned Credentials</span>
+            <Award className="w-4 h-4 text-yellow-500" />
+          </div>
+          
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {cohorts.filter(c => c.meanScore >= 70).map(c => {
+              let tier = 'Bronze Scholar';
+              let colors = 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800/50';
+              let icon = <Award className="w-6 h-6 text-orange-500" />;
+              
+              if (c.meanScore >= 95) {
+                tier = 'Gold Master';
+                colors = 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-300 dark:border-yellow-800/50 shadow-yellow-500/20 shadow-sm';
+                icon = <Star className="w-6 h-6 text-yellow-500" fill="currentColor" />;
+              } else if (c.meanScore >= 85) {
+                tier = 'Silver Expert';
+                colors = 'bg-slate-100 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700/50';
+                icon = <Medal className="w-6 h-6 text-slate-500 dark:text-slate-400" />;
+              }
 
               return (
-                <div 
-                  key={c.cohortId}
-                  className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center relative group cursor-pointer shadow-sm border border-black/5 dark:border-white/5 hover:scale-110 transition-all ${bgColor}`}
-                >
-                  <div className="opacity-0 group-hover:opacity-100 absolute bottom-full mb-2 bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm text-zinc-900 dark:text-zinc-50 text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap z-10 transition-opacity">
-                    {getTopicTitle(c.cohortId)}: {c.meanScore.toFixed(1)}%
+                <div key={c.cohortId} className={`flex flex-col items-center justify-center p-4 rounded-2xl border ${colors} text-center space-y-2 hover:scale-105 transition-transform cursor-default relative overflow-hidden group`}>
+                  <div className="absolute inset-0 bg-white/40 dark:bg-black/20 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                  <div className="p-2 bg-white/50 dark:bg-black/20 rounded-full shadow-sm">
+                    {icon}
+                  </div>
+                  <div>
+                    <h4 className="text-[11px] font-extrabold uppercase tracking-widest">{tier}</h4>
+                    <p className="text-[10px] opacity-80 mt-1 leading-tight font-medium truncate w-full max-w-[100px]" title={getTopicTitle(c.cohortId)}>
+                      {getTopicTitle(c.cohortId)}
+                    </p>
                   </div>
                 </div>
               );
-            })
-          )}
+            })}
+          </div>
         </div>
-        <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 mt-2 uppercase">
-           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-500"></div> Needs Attention</div>
-           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-yellow-400"></div> Learning</div>
-           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-500"></div> Mastered</div>
+      )}
+
+      {/* Cognitive Skill Graph and Topic Mastery Heatmap */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Cognitive Skill Graph */}
+        <div className="bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm rounded-[24px] p-6 space-y-4 transition-all duration-300 flex flex-col">
+          <div className="flex items-center justify-between text-xs font-semibold text-zinc-900 dark:text-zinc-50 opacity-80 tracking-wider uppercase">
+            <span>Cognitive Skill Profile</span>
+            <Brain className="w-4 h-4 text-[#2563EB] dark:text-[#60A5FA]" />
+          </div>
+          
+          <div className="flex-1 w-full min-h-[250px] -ml-4 relative">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="70%" data={skillData}>
+                <PolarGrid stroke="rgba(128,128,128,0.2)" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: 'currentColor', fontSize: 10, opacity: 0.8 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '12px' }}
+                  itemStyle={{ color: '#60A5FA', fontWeight: 'bold' }}
+                />
+                <Radar name="Mastery" dataKey="A" stroke="#2563EB" fill="#3B82F6" fillOpacity={0.3} />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Topic Mastery Heatmap */}
+        <div className="bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm rounded-[24px] p-6 space-y-4 transition-all duration-300">
+          <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Topic Mastery Heatmap</h3>
+          <div className="flex flex-wrap gap-2">
+            {cohorts.length === 0 ? (
+               <div className="text-zinc-900 dark:text-zinc-50 opacity-50 text-sm">No mastery data available yet. Start solving problems!</div>
+            ) : (
+              cohorts.map(c => {
+                let bgColor = 'bg-red-500'; // Needs Attention (< 50)
+                if (c.meanScore >= 80) bgColor = 'bg-green-500'; // Mastered
+                else if (c.meanScore >= 50) bgColor = 'bg-yellow-400'; // Learning
+
+                return (
+                  <div 
+                    key={c.cohortId}
+                    className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center relative group cursor-pointer shadow-sm border border-black/5 dark:border-white/5 hover:scale-110 transition-all ${bgColor}`}
+                  >
+                    <div className="opacity-0 group-hover:opacity-100 absolute bottom-full mb-2 bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm text-zinc-900 dark:text-zinc-50 text-[10px] font-bold px-2 py-1 rounded-lg pointer-events-none whitespace-nowrap z-10 transition-opacity">
+                      {getTopicTitle(c.cohortId)}: {c.meanScore.toFixed(1)}%
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="flex items-center gap-4 text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 mt-2 uppercase">
+             <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-red-500"></div> Needs Attention</div>
+             <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-yellow-400"></div> Learning</div>
+             <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-green-500"></div> Mastered</div>
+          </div>
         </div>
       </div>
     </div>

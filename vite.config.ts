@@ -62,7 +62,8 @@ export default defineConfig(() => {
       }
     },
     esbuild: {
-      drop: ['console', 'debugger'] as any,
+      drop: ['debugger'] as any,
+      pure: ['console.log', 'console.info', 'console.debug'],
     }
   };
 });

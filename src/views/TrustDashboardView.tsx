@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ShieldCheck, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { SEO } from '../components/common/SEO';
 
 interface TrustStats {
   overallVerifiedRate: number;
@@ -31,6 +32,7 @@ export const TrustDashboardView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#0A0A0B] text-zinc-900 dark:text-zinc-100 p-8 flex flex-col items-center justify-center">
+      <SEO title="Trust Dashboard" description="Live telemetry of our Dual-AI Fact-Checking system." />
       <div className="max-w-4xl w-full">
         
         {/* Header */}

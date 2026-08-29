@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { ToastType } from '../components/common/Toast';
+import { SEO } from '../components/common/SEO';
 import { Check, MessageSquare, AlertTriangle } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 
@@ -31,7 +32,7 @@ export const MentorReviewView: React.FC<MentorReviewViewProps> = ({ onNotify, is
   const fetchQueue = async () => {
     try {
       setLoading(true);
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       const res = await fetch('/api/db/review-queue', {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -58,7 +59,7 @@ export const MentorReviewView: React.FC<MentorReviewViewProps> = ({ onNotify, is
   const handleResolve = async (reviewId: string) => {
     try {
       setResolvingId(reviewId);
-      const token = await getToken({ template: 'supabase' });
+      const token = await getToken();
       const notes = resolutionInput[reviewId] || 'Reviewed and resolved by mentor.';
       
       const res = await fetch(`/api/db/review-queue/${reviewId}/resolve`, {
@@ -98,6 +99,7 @@ export const MentorReviewView: React.FC<MentorReviewViewProps> = ({ onNotify, is
 
   return (
     <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-8">
+      <SEO title="Mentor Review" description="Review flagged interactions." />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Mentor Review Queue</h1>

@@ -16,11 +16,18 @@ if (!PUBLISHABLE_KEY) {
   throw new Error("Missing Publishable Key. Please add PUBLIC_CLERK_PUBLISHABLE_KEY to your Vercel Environment Variables.");
 }
 
+import { BrowserRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
-        <App />
+        <HelmetProvider>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </HelmetProvider>
       </ClerkProvider>
     </ErrorBoundary>
   </StrictMode>,

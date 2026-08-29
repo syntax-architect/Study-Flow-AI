@@ -13,9 +13,23 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = React.memo(({ soundEnabled = true, currentUnit, onSelectUnit }) => {
   const [showInvestorDeck, setShowInvestorDeck] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  React.useEffect(() => {
+    const handleScroll = () => {
+      const scrollContainer = document.querySelector('main') || window;
+      const scrollY = scrollContainer instanceof Window ? window.scrollY : scrollContainer.scrollTop;
+      setScrolled(scrollY > 10);
+    };
+    const scrollContainer = document.querySelector('main') || window;
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+  }, []);
 
   return (
-    <header className="sticky top-0 z-30 px-4 py-2.5 transition-colors duration-300 pointer-events-none">
+    <header className={`sticky top-0 z-50 px-4 py-2.5 transition-all duration-300 pointer-events-none ${
+      scrolled ? 'bg-white/80 dark:bg-[#0A0A0B]/80 backdrop-blur-md border-b border-zinc-200 dark:border-white/10 shadow-sm' : ''
+    }`}>
       <div className="w-full max-w-[1600px] mx-auto flex items-center justify-end pointer-events-auto">
         
         {/* Live System Telemetry & Investor Deck Modal Trigger */}

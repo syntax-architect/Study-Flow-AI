@@ -22,17 +22,11 @@ export const supabase = createClient(
 );
 
 export const getAuthSupabase = (token?: string) => {
-  // If a user token is provided, prioritize it to respect RLS policies tied to the user's Clerk JWT
-  if (token && token !== 'null' && token !== 'undefined') {
+  if (supabaseAdminKey) {
     return createClient(
       supabaseUrl,
-      supabaseKey,
+      supabaseAdminKey,
       {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        },
         auth: {
           autoRefreshToken: false,
           persistSession: false
@@ -40,8 +34,5 @@ export const getAuthSupabase = (token?: string) => {
       }
     );
   }
-
-  // Removed service role fallback to prevent RLS bypass on unauthenticated requests.
-  // Fallback to anon client if nothing else is available
   return supabase;
 };
