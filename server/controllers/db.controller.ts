@@ -136,6 +136,29 @@ export const getCohortAnalytics = async (req: Request, res: Response, next: Next
   }
 };
 
+export const getPublicTrustStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data: overallVerifiedRate, error: rateError } = await supabase.rpc('get_global_verified_rate');
+    if (rateError) console.warn('Supabase error getting global verified rate:', rateError.message);
+
+    const { data: totalQueries, error: countError } = await supabase.rpc('get_total_queries');
+    if (countError) console.warn('Supabase error getting total queries:', countError.message);
+
+    const total = totalQueries || 0;
+    const rate = overallVerifiedRate || 0;
+    const verifiedCount = Math.round((rate / 100) * total);
+    const criticCaughtErrors = total - verifiedCount;
+
+    res.json({
+      overallVerifiedRate: rate,
+      totalQueries: total,
+      criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getPersonalCohortAnalytics = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const client = getClient(req);

@@ -170,6 +170,25 @@ export class AiService {
     let secondaryError: any = null;
 
     let modelToUse = config.primaryAiModel;
+    let primaryApiKey = config.primaryAiApiKey;
+    let primaryBaseUrl = config.primaryAiBaseUrl;
+    let secondaryApiKey = config.secondaryAiApiKey;
+    let secondaryBaseUrl = config.secondaryAiBaseUrl;
+
+    if (endpoint === 'critic') {
+      modelToUse = config.criticAiModel;
+      primaryApiKey = config.criticAiApiKey;
+      primaryBaseUrl = config.criticAiBaseUrl;
+      secondaryApiKey = config.criticAiApiKey;
+      secondaryBaseUrl = config.criticAiBaseUrl;
+    } else if (endpoint === 'solver') {
+      modelToUse = config.solverAiModel;
+      primaryApiKey = config.solverAiApiKey;
+      primaryBaseUrl = config.solverAiBaseUrl;
+      secondaryApiKey = config.solverAiApiKey;
+      secondaryBaseUrl = config.solverAiBaseUrl;
+    }
+
     let hasImage = false;
     let hasMultilingual = false;
 
@@ -196,14 +215,16 @@ export class AiService {
     if (hasImage) {
       modelToUse = config.visionAiModel;
       console.log(`[AI Engine] Vision detected. Switching to specialized model: ${modelToUse}`);
-    } else if (hasMultilingual) {
+    } else if (hasMultilingual && endpoint !== 'critic' && endpoint !== 'solver') {
+      // Don't override specialized solver/critic models for language routing
       modelToUse = config.multilingualAiModel;
       console.log(`[AI Engine] Hindi/Bengali detected. Switching to specialized model: ${modelToUse}`);
     }
 
     try {
-      const primaryClient = this.getPrimaryClient();
-      console.log(`[AI Engine] Attempting generation with Primary API (${modelToUse})...`);
+      if (!primaryApiKey) throw new Error(`Missing primary API key for endpoint: ${endpoint}`);
+      const primaryClient = new OpenAI({ apiKey: primaryApiKey, baseURL: primaryBaseUrl });
+      console.log(`[AI Engine] Attempting generation with Primary API (${modelToUse}) for ${endpoint || 'default'}...`);
       return await this.executeLoop(primaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback);
     } catch (error) {
       console.warn(`[AI Engine] Primary API failed:`, error);
@@ -211,8 +232,9 @@ export class AiService {
     }
 
     try {
-      const secondaryClient = this.getSecondaryClient();
-      console.log(`[AI Engine] Attempting generation with Secondary API (${modelToUse})...`);
+      if (!secondaryApiKey) throw new Error(`Missing secondary API key for endpoint: ${endpoint}`);
+      const secondaryClient = new OpenAI({ apiKey: secondaryApiKey, baseURL: secondaryBaseUrl });
+      console.log(`[AI Engine] Attempting generation with Secondary API (${modelToUse}) for ${endpoint || 'default'}...`);
       return await this.executeLoop(secondaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback);
     } catch (error) {
       console.error(`[AI Engine] Secondary API also failed:`, error);
@@ -821,11 +843,42 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
       console.warn('[AI Engine] Semantic cache check failed:', err);
     }
 
-    const solverData = await this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.4, (token) => {
-      if (onEvent) {
-        onEvent({ type: 'solver_chunk', data: { content: token } });
+    const solverPromises = [
+      this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.3, (token) => {
+        if (onEvent) {
+          onEvent({ type: 'solver_chunk', data: { content: token } });
+        }
+      }),
+      this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.5),
+      this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.7)
+    ];
+
+    const [solverDataPrimary, solverDataSample2, solverDataSample3] = await Promise.all(solverPromises);
+    const solverData = solverDataPrimary;
+    
+    const eq1 = solverDataPrimary.finalEquation || '';
+    const eq2 = solverDataSample2.finalEquation || '';
+    const eq3 = solverDataSample3.finalEquation || '';
+
+    let samplesDisagree = false;
+    try {
+      const primaryClient = this.getPrimaryClient();
+      const compareRes = await primaryClient.chat.completions.create({
+        model: config.primaryAiModel,
+        messages: [{ role: 'system', content: `Are these mathematical answers fundamentally equivalent? Answer ONLY "YES" or "NO".\n\nAnswer 1: ${eq1}\nAnswer 2: ${eq2}\nAnswer 3: ${eq3}` }],
+        max_tokens: 5,
+        temperature: 0.1
+      });
+      if (compareRes.choices[0]?.message?.content?.trim().toUpperCase().includes('NO')) {
+        samplesDisagree = true;
       }
-    });
+    } catch (e) {
+      const clean = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+      samplesDisagree = !(clean(eq1) === clean(eq2) && clean(eq2) === clean(eq3));
+    }
+
+    console.log(`[AI Engine] Primary derivation (T=0.3) shown to student. Consensus check: ${samplesDisagree ? 'DISAGREED' : 'AGREED'}. Eq1: ${eq1}, Eq2: ${eq2}, Eq3: ${eq3}`);
+
     if (onEvent) {
       onEvent({ type: 'solver_draft', data: solverData });
     }
@@ -840,6 +893,7 @@ Question: "${query}"
 
 Solver Derivation:
 ${JSON.stringify(solverData.steps, null, 2)}
+${samplesDisagree ? "\nWARNING: Multiple independent solver runs produced conflicting final equations. Audit this derivation with EXTREME skepticism. The confidence score should likely be lowered." : ""}
 
 CRITICAL RULES FOR AUDIT:
 1. Dimensional Analysis: Explicitly check units/dimensions of the final equation.

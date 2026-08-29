@@ -12,9 +12,10 @@ interface NavbarProps {
   onOpenSettings?: () => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
+  isTeacherMode?: boolean;
 }
 
-export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChange, soundEnabled = true, onOpenSettings, isCollapsed, onToggleCollapse }) => {
+export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChange, soundEnabled = true, onOpenSettings, isCollapsed, onToggleCollapse, isTeacherMode }) => {
   const { user } = useUser();
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'hub', label: 'Hub', icon: <Compass className="w-[18px] h-[18px]" /> },
@@ -22,6 +23,10 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({ activeTab, onTabChang
     { id: 'vault', label: 'Vault', icon: <Archive className="w-[18px] h-[18px]" /> },
     { id: 'analytics', label: 'Analytics', icon: <BarChart2 className="w-[18px] h-[18px]" /> },
   ];
+
+  if (isTeacherMode) {
+    tabs.push({ id: 'review', label: 'Review', icon: <CheckCircle2 className="w-[18px] h-[18px]" /> });
+  }
 
   return (
     <nav className={`fixed bottom-0 left-0 right-0 z-40 md:bottom-0 md:top-0 ${isCollapsed ? 'md:w-[72px]' : 'md:w-[240px]'} md:h-screen md:rounded-none bg-white dark:bg-[#111113] border-t border-zinc-200 dark:border-white/[0.06] md:border-t-0 md:border-r py-2 px-3 md:py-5 md:px-3 premium-transition flex md:flex-col justify-between`}>

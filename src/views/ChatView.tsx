@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 
-import { Bot, User, Send, RefreshCw, Copy, Check, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square, AudioLines } from 'lucide-react';
+import { Bot, User, Send, RefreshCw, Copy, Check, CheckCircle2, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square, AudioLines } from 'lucide-react';
 import { playSound } from '../utils/sound';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -769,14 +769,56 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
           {loading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 flex-shrink-0 mt-1">
+              <div className="w-8 h-8 rounded-full bg-white dark:bg-[#18181B] border border-black/10 dark:border-white/10 shadow-sm flex items-center justify-center text-[#2563EB] dark:text-[#60A5FA] flex-shrink-0 mt-1">
                 <Bot className="w-4 h-4" />
               </div>
-              <div className="bg-zinc-50 dark:bg-white/[0.04] border border-zinc-200 dark:border-white/[0.06] rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%] flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
-                 <span className="text-[11px] text-zinc-500 font-medium ml-2">Processing...</span>
+              <div className="w-full max-w-[100%] md:max-w-[90%] bg-[#FAFAFA] dark:bg-[#18181B] border border-black/5 dark:border-white/5 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4">
+                <div className="bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 p-4 rounded-2xl">
+                  <h4 className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-widest mb-3">AI Execution Pipeline</h4>
+                  <div className="flex items-center justify-between relative">
+                    {/* Connecting Line */}
+                    <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-black/5 dark:bg-white/5 -translate-y-1/2 z-0">
+                       <m.div 
+                         className="h-full bg-gradient-to-r from-blue-500 to-emerald-500"
+                         initial={{ width: '0%' }}
+                         animate={{ width: '0%' }}
+                       />
+                    </div>
+
+                    {/* Node 1: Solver */}
+                    <div className="relative z-10 flex flex-col items-center gap-2 bg-white dark:bg-[#09090b] px-2">
+                      <m.div 
+                        initial={{ scale: 0 }} animate={{ scale: 1 }}
+                        className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30 ring-4 ring-blue-500/20 animate-pulse"
+                      >
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                      </m.div>
+                      <span className="text-[9px] font-bold text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">Solver</span>
+                    </div>
+
+                    {/* Node 2: Critic Review */}
+                    <div className="relative z-10 flex flex-col items-center gap-2 bg-white dark:bg-[#09090b] px-2">
+                      <m.div 
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-zinc-900 dark:text-zinc-50/30 bg-black/5 dark:bg-white/5 shadow-lg"
+                      >
+                        <RefreshCw className="w-3 h-3 opacity-50" />
+                      </m.div>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-50 opacity-50">Critic</span>
+                    </div>
+
+                    {/* Node 3: Decision Gate */}
+                    <div className="relative z-10 flex flex-col items-center gap-2 bg-white dark:bg-[#09090b] px-2">
+                      <m.div 
+                        initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.4 }}
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-zinc-900 dark:text-zinc-50/30 bg-black/5 dark:bg-white/5 shadow-lg"
+                      >
+                        <CheckCircle2 className="w-3 h-3 opacity-50" />
+                      </m.div>
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-zinc-900 dark:text-zinc-50 opacity-50">Decision Gate</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           )}

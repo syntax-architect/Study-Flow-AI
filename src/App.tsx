@@ -8,6 +8,8 @@ const HubView = lazy(() => import('./views/HubView').then(module => ({ default: 
 const ChatView = lazy(() => import('./views/ChatView').then(module => ({ default: module.ChatView })));
 const AnalyticsView = lazy(() => import('./views/AnalyticsView').then(module => ({ default: module.AnalyticsView })));
 const VaultView = lazy(() => import('./views/VaultView').then(module => ({ default: module.VaultView })));
+const MentorReviewView = lazy(() => import('./views/MentorReviewView').then(module => ({ default: module.MentorReviewView })));
+const TrustDashboardView = lazy(() => import('./views/TrustDashboardView').then(module => ({ default: module.TrustDashboardView })));
 import { LoginView } from './views/LoginView';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { ToastContainer, ToastMessage, ToastType } from './components/common/Toast';
@@ -22,6 +24,13 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [appLoaded, setAppLoaded] = useState(false);
+  const [isTrustRoute, setIsTrustRoute] = useState(window.location.pathname === '/trust');
+
+  React.useEffect(() => {
+    const handlePopState = () => setIsTrustRoute(window.location.pathname === '/trust');
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const [activeTab, setActiveTab] = useState<TabType>('hub');
   const [selectedUnitId, setSelectedUnitId] = useState<string>('unit-active');
@@ -114,8 +123,14 @@ export default function App() {
       </AnimatePresence>
       <div className="flex flex-col h-[100dvh] overflow-hidden w-full bg-zinc-50 dark:bg-[#0A0A0B] text-zinc-900 dark:text-zinc-100 transition-colors duration-500 relative selection:bg-blue-500/20">
       <ToastContainer toasts={toasts} />
-      <SignedIn>
-        <div className={`flex flex-col flex-1 min-h-0 h-full w-full transition-all duration-300 ${isSidebarCollapsed ? 'md:pl-[72px]' : 'md:pl-[240px]'}`}>
+      {isTrustRoute ? (
+        <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-t-[#2563EB] border-black/10 dark:border-white/10 animate-spin" /></div>}>
+          <TrustDashboardView />
+        </Suspense>
+      ) : (
+        <>
+          <SignedIn>
+            <div className={`flex flex-col flex-1 min-h-0 h-full w-full transition-all duration-300 ${isSidebarCollapsed ? 'md:pl-[72px]' : 'md:pl-[240px]'}`}>
           <Header 
             currentUnit={selectedUnitId}
             onSelectUnit={(unitId) => setSelectedUnitId(unitId)}
@@ -182,7 +197,10 @@ export default function App() {
                 />
               )}
 
+
               {activeTab === 'analytics' && <AnalyticsView onNotify={handleNotify} isTeacherMode={isTeacherMode} />}
+
+              {activeTab === 'review' && <MentorReviewView onNotify={handleNotify} isTeacherMode={isTeacherMode} />}
             </Suspense>
           </m.div>
         </AnimatePresence>
@@ -196,6 +214,7 @@ export default function App() {
         onOpenSettings={() => setShowSettings(true)}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={toggleSidebar}
+        isTeacherMode={isTeacherMode}
       />
     </div>
       </SignedIn>
@@ -206,6 +225,8 @@ export default function App() {
           onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
         />
       </SignedOut>
+      </>
+      )}
     </div>
     </LazyMotion>
   );

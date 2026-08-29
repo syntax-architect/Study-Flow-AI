@@ -191,39 +191,41 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
              />
           </div>
 
-          {/* Node 1: First Principles */}
+          {/* Node 1: Solver */}
           <div className="relative z-10 flex flex-col items-center gap-2 bg-white dark:bg-[#09090b] px-2">
             <m.div 
               initial={{ scale: 0 }} animate={{ scale: 1 }}
-              className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30"
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg ${isStreaming ? 'bg-blue-500 shadow-blue-500/30 ring-4 ring-blue-500/20' : 'bg-blue-500 shadow-blue-500/30'}`}
             >
-              <BookOpen className="w-3 h-3" />
+              {isStreaming ? <RefreshCw className="w-3 h-3 animate-spin" /> : <BookOpen className="w-3 h-3" />}
             </m.div>
-            <span className="text-[9px] font-bold text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">Concept</span>
+            <span className="text-[9px] font-bold text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">Solver</span>
           </div>
 
-          {/* Node 2: Derivation */}
+          {/* Node 2: Critic Review */}
           <div className="relative z-10 flex flex-col items-center gap-2 bg-white dark:bg-[#09090b] px-2">
             <m.div 
               initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.3 }}
-              className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/30"
+              className={`w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg transition-colors duration-500 ${
+                isStreaming ? 'bg-black/5 dark:bg-white/5 text-zinc-900 dark:text-zinc-50/30' : isVerifying ? 'bg-blue-500 shadow-blue-500/30 ring-4 ring-blue-500/20' : 'bg-blue-500 shadow-blue-500/30'
+              }`}
             >
-              <RefreshCw className="w-3 h-3" />
+              {(isStreaming) ? <RefreshCw className="w-3 h-3 opacity-50" /> : isVerifying ? <RefreshCw className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
             </m.div>
-            <span className="text-[9px] font-bold text-zinc-900 dark:text-zinc-50 uppercase tracking-wider">Derivation</span>
+            <span className={`text-[9px] font-bold uppercase tracking-wider ${(isStreaming) ? 'text-zinc-900 dark:text-zinc-50 opacity-50' : 'text-zinc-900 dark:text-zinc-50'}`}>Critic</span>
           </div>
 
-          {/* Node 3: Critic Review */}
+          {/* Node 3: Decision Gate */}
           <div className="relative z-10 flex flex-col items-center gap-2 bg-white dark:bg-[#09090b] px-2">
             <m.div 
               initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.6 }}
               className={`w-6 h-6 rounded-full flex items-center justify-center text-white shadow-lg transition-colors duration-500 ${
-                isStreaming ? 'bg-black/5 dark:bg-white/5 text-zinc-900 dark:text-zinc-50/30' : isVerifying ? 'bg-black/10 dark:bg-white/10 text-zinc-900 dark:text-zinc-50' : isVerified ? 'bg-emerald-500 shadow-emerald-500/30' : 'bg-amber-500 shadow-amber-500/30'
+                (isVerifying || isStreaming) ? 'bg-black/5 dark:bg-white/5 text-zinc-900 dark:text-zinc-50/30' : isVerified ? 'bg-emerald-500 shadow-emerald-500/30' : 'bg-amber-500 shadow-amber-500/30'
               }`}
             >
-              {(isVerifying || isStreaming) ? <RefreshCw className={`w-3 h-3 opacity-50 ${isVerifying ? 'animate-spin' : ''}`} /> : isVerified ? <ShieldCheck className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+              {(isVerifying || isStreaming) ? <CheckCircle2 className="w-3 h-3 opacity-50" /> : isVerified ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
             </m.div>
-            <span className={`text-[9px] font-bold uppercase tracking-wider ${(isVerifying || isStreaming) ? 'text-zinc-900 dark:text-zinc-50 opacity-50' : 'text-zinc-900 dark:text-zinc-50'}`}>Critic</span>
+            <span className={`text-[9px] font-bold uppercase tracking-wider ${(isVerifying || isStreaming) ? 'text-zinc-900 dark:text-zinc-50 opacity-50' : 'text-zinc-900 dark:text-zinc-50'}`}>Decision Gate</span>
           </div>
         </div>
       </div>
