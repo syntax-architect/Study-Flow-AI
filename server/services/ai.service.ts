@@ -451,11 +451,10 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
   static async streamChat(messages: any[], systemInstruction: string, filter?: { subject?: string; chapter?: string }) { // FIX: Bug 5
     let primaryError: any = null;
     
-    // Summarization logic to prevent context bloat
     let processedMessages = messages;
-    if (messages.length > 10) {
-      const earlierMessages = messages.slice(0, -4);
-      const lastFourMessages = messages.slice(-4);
+    if (messages.length > 12) {
+      const earlierMessages = messages.slice(0, -6);
+      const lastSixMessages = messages.slice(-6);
       
       const earlierHistoryText = earlierMessages.map((m: any) => `${m.role}: ${m.content}`).join('\n');
       const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
@@ -472,7 +471,7 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         if (summary) {
           processedMessages = [
             { role: 'system', content: `Previous Context Summary: ${summary}` },
-            ...lastFourMessages
+            ...lastSixMessages
           ];
         }
       } catch (err) {
@@ -494,6 +493,7 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
 - Use the Socratic method: Ask guiding questions to help the student realize the next step on their own.
 - Validate their partial understanding before correcting them.
 - Keep responses concise and focused on one conceptual step at a time.
+- When responding, explicitly reference prior turns in the conversation naturally (e.g., "As we established earlier...", "Building on your previous answer...") if the context is relevant, instead of treating this as an isolated question.
 
 ${systemInstruction}
 
@@ -693,7 +693,30 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
     if (messages.length > 0 && messages[messages.length - 1].content === query) {
       historyToUse = messages.slice(0, -1);
     }
-    const recentHistory = historyToUse.slice(-5).map(m => ({ role: m.role, content: m.content }));
+
+    let summarizedContext = '';
+    let recentHistory = historyToUse.map(m => ({ role: m.role, content: m.content }));
+    if (historyToUse.length > 12) {
+      const earlierMessages = historyToUse.slice(0, -6);
+      recentHistory = historyToUse.slice(-6).map(m => ({ role: m.role, content: m.content }));
+      
+      const earlierHistoryText = earlierMessages.map((m: any) => `${m.role}: ${m.content}`).join('\n');
+      const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
+      
+      try {
+        const primaryClient = this.getPrimaryClient();
+        const summaryRes = await primaryClient.chat.completions.create({
+          model: config.primaryAiModel,
+          messages: [{ role: 'user', content: summaryPrompt }],
+          max_tokens: 150,
+          temperature: 0.1
+        });
+        summarizedContext = summaryRes.choices[0]?.message?.content || '';
+      } catch (err) {
+        console.warn('[AI Engine] Summarization failed, falling back to truncated history:', err);
+      }
+    }
+    
     const historyText = recentHistory.map(m => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\n');
     
     const ncertContext = await this.advancedRetrieveContext(query, historyText, { subject }, userId);
@@ -701,12 +724,19 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
     const languageInstruction = `Respond entirely in ${langName}, including step descriptions and citation notes, but keep mathematical notation and variable names in English/standard math notation.`;
     const masteryContext = await this.fetchUserMasteryContext(userId);
     
-    const solverMessages = [
-      { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.` },
-      { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.` },
-      ...recentHistory,
-      { role: 'user', content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"` }
+    const systemInstruction = MASTER_SYSTEM_PROMPT + `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}\n\nWhen responding, explicitly reference prior turns in the conversation naturally (e.g., "As we established earlier...", "Building on your previous answer...") if the context is relevant, instead of treating this as an isolated question.\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.`;
+
+    const solverMessages: any[] = [
+      { role: 'system', content: systemInstruction },
+      { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.` }
     ];
+
+    if (summarizedContext) {
+      solverMessages.push({ role: 'system', content: `Previous Context Summary: ${summarizedContext}` });
+    }
+
+    solverMessages.push(...recentHistory);
+    solverMessages.push({ role: 'user', content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"` });
     
     const solverSchema = {
       type: "object",
@@ -1066,5 +1096,58 @@ CRITICAL RULES FOR AUDIT:
     const response = await this.executeWithFallback(auditMessages, schemaDescription, 'topic_audit_response', userId, 'audit');
     appCache.set(cacheKey, response, 3600 * 24); // Cache for 24 hours
     return response;
+  }
+
+  static async performVisionOCR(buffer: Buffer, mimetype: string): Promise<string> {
+    try {
+      const base64Image = buffer.toString('base64');
+      const dataUrl = `data:${mimetype};base64,${base64Image}`;
+      
+      const primaryClient = this.getPrimaryClient();
+      const response = await primaryClient.chat.completions.create({
+        model: config.visionAiModel,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert OCR system. Transcribe the handwritten or printed text from the image accurately. Preserve all mathematical notation using LaTeX format ($...$ for inline, $$...$$ for block). Return ONLY the transcribed text without any extra conversational text or markdown blocks.'
+          },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Please transcribe this image.' },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: dataUrl
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 1000,
+        temperature: 0.1
+      });
+
+      return response.choices[0]?.message?.content?.trim() || '';
+    } catch (err) {
+      console.error('[AI Engine] Vision OCR Error:', err);
+      throw err;
+    }
+  }
+
+  static async transcribeAudio(filePath: string): Promise<string> {
+    try {
+      const primaryClient = this.getPrimaryClient();
+      const transcription = await primaryClient.audio.transcriptions.create({
+        file: fs.createReadStream(filePath),
+        model: 'whisper-large-v3', 
+        response_format: 'text',
+      });
+      // Handle different return types (text directly or object)
+      return typeof transcription === 'string' ? transcription : (transcription as any).text || '';
+    } catch (err) {
+      console.error('[AI Engine] Transcription Error:', err);
+      throw err;
+    }
   }
 }

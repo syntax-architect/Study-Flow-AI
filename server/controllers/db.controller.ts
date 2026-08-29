@@ -359,3 +359,37 @@ export const toggleMessagePin = async (req: Request, res: Response, next: NextFu
     next(err);
   }
 };
+
+export const getReviewQueue = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const client = getClient(req);
+    const { data, error } = await client
+      .from('review_queue')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resolveReview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { reviewId } = req.params;
+    const { resolutionNotes } = req.body;
+    const client = getClient(req);
+    const { data, error } = await client
+      .from('review_queue')
+      .update({ resolution_notes: resolutionNotes, status: 'resolved' })
+      .eq('id', reviewId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};

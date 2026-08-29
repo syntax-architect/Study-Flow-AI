@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 
-import { Bot, User, Send, RefreshCw, Copy, Check, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square } from 'lucide-react';
+import { Bot, User, Send, RefreshCw, Copy, Check, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square, AudioLines } from 'lucide-react';
 import { playSound } from '../utils/sound';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -45,6 +45,8 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const isManualSwitch = useRef<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState(propSoundEnabled);
+  
+  const [subject, setSubject] = useState('NCERT Class 11 Physics');
   
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -129,6 +131,71 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const { isListening, isSupported, toggleListening } = useSpeechRecognition((transcript) => {
     setUserPrompt((prev) => prev + (prev ? ' ' : '') + transcript);
   });
+
+  const [isMediaRecording, setIsMediaRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  const toggleMediaRecording = async () => {
+    if (isMediaRecording) {
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+      }
+      setIsMediaRecording(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(track => track.stop());
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = [];
+          
+          setUserPrompt((p) => p + (p ? ' ' : '') + '(Transcribing...)');
+
+          try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'audio.webm');
+            
+            const token = await getToken({ template: 'supabase' });
+            const res = await fetch('/api/voice-transcribe', {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`
+              },
+              body: formData
+            });
+
+            if (res.ok) {
+              const data = await res.json();
+              setUserPrompt((p) => p.replace('(Transcribing...)', data.text.trim()));
+            } else {
+              throw new Error('Transcription failed');
+            }
+          } catch (e) {
+            console.error(e);
+            onNotify('Failed to transcribe audio', 'error');
+            setUserPrompt((p) => p.replace('(Transcribing...)', ''));
+          }
+        };
+
+        mediaRecorder.start();
+        setIsMediaRecording(true);
+      } catch (e) {
+        console.error('Microphone access denied:', e);
+        onNotify('Microphone access denied', 'error');
+      }
+    }
+  };
 
   useEffect(() => {
     try {
@@ -254,19 +321,56 @@ export const ChatView: React.FC<ChatViewProps> = ({
     },
   ];
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     playSound('click', soundEnabled);
     setIsProcessingImage(true);
-    
-    // Honest demo state instead of fake OCR
-    setTimeout(() => {
+
+    try {
+      const token = await getToken({ template: 'supabase' });
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await fetch('/api/vision-ocr', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process image');
+      }
+
+      const data = await response.json();
+      if (data.text) {
+        setUserPrompt(prev => prev ? `${prev}\n\n${data.text}` : data.text);
+        onNotify('Image scanned successfully! Review the text before sending.', 'success');
+        
+        if (inputRef.current) {
+          setTimeout(() => {
+            inputRef.current?.focus();
+            if (inputRef.current) {
+              (inputRef.current as any).style.height = 'auto';
+              (inputRef.current as any).style.height = `${Math.min(inputRef.current.scrollHeight, 150)}px`;
+            }
+          }, 100);
+        }
+      } else {
+        throw new Error('No text found in image');
+      }
+    } catch (err: any) {
+      console.error('Vision OCR Error:', err);
+      onNotify(err.message || 'Failed to scan image', 'error');
+    } finally {
       setIsProcessingImage(false);
-      setUserPrompt("Demo Mode: image scanning coming soon");
-      onNotify?.("Image scanning feature is coming soon!", "info");
-    }, 1500);
+      if (e.target) {
+        e.target.value = ''; // Reset file input
+      }
+    }
   };
 
   const handleSubmit = async (e?: React.FormEvent, customQuery?: string) => {
@@ -336,7 +440,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         signal: abortControllerRef.current.signal,
         body: JSON.stringify({
           query: queryToUse,
-          subject: 'NCERT Class 11 Physics',
+          subject,
           chatId: currentChatId,
           userId: userId,
           language,
@@ -681,7 +785,21 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
         {/* Input Container */}
         <div className="px-4 md:px-8 pt-3 pb-6 md:pb-8 w-full max-w-3xl mx-auto flex flex-col items-center">
-          <div className="w-full bg-zinc-100 dark:bg-[#1E1F20] rounded-[32px] p-2 pr-4 shadow-sm relative transition-all focus-within:ring-2 focus-within:ring-white/10">
+          <div className="w-full bg-zinc-100 dark:bg-[#1E1F20] rounded-[32px] p-2 pr-4 shadow-sm relative transition-all focus-within:ring-2 focus-within:ring-white/10 flex flex-col">
+            {/* Subject Selector */}
+            <div className="px-3 pt-2 pb-1 border-b border-black/5 dark:border-white/5 mx-2 mb-1 flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Subject Context</span>
+              <select
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="bg-transparent dark:bg-[#1E1F20] text-xs font-semibold text-zinc-700 dark:text-zinc-200 focus:outline-none cursor-pointer text-right"
+              >
+                <option value="NCERT Class 11 Physics">Physics (Class 11)</option>
+                <option value="NCERT Class 11 Chemistry">Chemistry (Class 11)</option>
+                <option value="NCERT Class 11 Mathematics">Mathematics (Class 11)</option>
+              </select>
+            </div>
+
             {/* Demo Preset Chips - only show on empty chat */}
             {!activeChatId && messages.length === 0 && (
               <m.div 
@@ -764,10 +882,20 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <div className="flex items-center gap-2 flex-shrink-0">
 
 
+                <button
+                  type="button"
+                  onClick={toggleMediaRecording}
+                  title="Record audio (Server Transcription)"
+                  className={`cursor-pointer w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isMediaRecording ? 'text-blue-500 bg-blue-500/10 animate-pulse' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-white/5'}`}
+                >
+                  <AudioLines className="w-5 h-5" />
+                </button>
+
                 {isSupported && (
                   <button
                     type="button"
                     onClick={toggleListening}
+                    title="Dictate (Browser)"
                     className={`cursor-pointer w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isListening ? 'text-rose-500 bg-rose-500/10' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-white/5'}`}
                   >
                     {isListening ? (

@@ -212,3 +212,42 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
     }
   }
 };
+
+export const handleVoiceTranscribe = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file uploaded' });
+    }
+
+    const fs = require('fs');
+    const filePath = req.file.path;
+
+    const transcription = await AiService.transcribeAudio(filePath);
+
+    // Clean up the temporary file
+    fs.unlink(filePath, (err: NodeJS.ErrnoException | null) => {
+      if (err) console.error('[Voice] Failed to delete temp audio file:', err);
+    });
+
+    res.json({ text: transcription });
+  } catch (err: any) {
+    console.error('Voice transcription error:', err);
+    next(err);
+  }
+};
+
+export const handleVisionOCR = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    const { buffer, mimetype } = req.file;
+    const transcribedText = await AiService.performVisionOCR(buffer, mimetype);
+    
+    res.json({ text: transcribedText });
+  } catch (err: any) {
+    console.error('Vision OCR Error:', err);
+    res.status(500).json({ error: err.message || 'Failed to process image' });
+  }
+};

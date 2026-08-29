@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { SolverResult } from '../../types';
-import { ShieldCheck, AlertTriangle, BookOpen, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
-import { m } from 'motion/react';
+import { ShieldCheck, AlertTriangle, BookOpen, CheckCircle2, XCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { m, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -15,6 +15,119 @@ interface Props {
   chatId?: string | null;
   messageId?: string;
   onNotify?: (msg: string, type: 'success' | 'warning' | 'info') => void;
+}
+
+const StepItem = ({ step, idx, isVerifying, isStreaming, preprocessMath, globalCitation }: any) => {
+  const [expanded, setExpanded] = useState(true);
+  
+  const citation = step.citation || globalCitation;
+  const isVerified = step.verified;
+
+  return (
+    <div className="bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 rounded-2xl relative overflow-hidden flex flex-col transition-all">
+      <button 
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">
+            Step {step.stepNumber || idx + 1}: {step.title || 'Step'}
+          </span>
+          {!isVerifying && !isStreaming && (
+            <span className={`flex items-center gap-1 text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded-full ${
+              isVerified ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+            }`}>
+              {isVerified ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+              {isVerified ? 'Verified' : 'Flagged'}
+            </span>
+          )}
+        </div>
+        <div className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
+          {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {expanded && (
+          <m.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden border-t border-black/5 dark:border-white/5"
+          >
+            <div className="p-4 space-y-4 pt-2">
+              {step.description && (
+                <div className="text-sm leading-relaxed">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+                  >
+                    {preprocessMath(step.description)}
+                  </ReactMarkdown>
+                </div>
+              )}
+              
+              {step.mathBlock && (
+                <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 p-3 rounded-xl overflow-x-auto text-sm">
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+                  >
+                    {preprocessMath(step.mathBlock)}
+                  </ReactMarkdown>
+                </div>
+              )}
+
+              {!isVerifying && !isStreaming && (
+                <div className={`mt-4 rounded-xl border p-3 ${
+                  isVerified 
+                    ? 'bg-emerald-50/50 dark:bg-emerald-500/5 border-emerald-500/20' 
+                    : 'bg-rose-50/50 dark:bg-rose-500/5 border-rose-500/20'
+                }`}>
+                  <div className="flex flex-col gap-2">
+                    {citation && (
+                      <div className="flex items-start gap-2 text-xs">
+                        <BookOpen className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${isVerified ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`} />
+                        <span className="opacity-80">
+                          <strong>Grounded on:</strong> {citation.textbook}, {citation.chapter} {citation.ncertPage && `(Page ${citation.ncertPage})`}
+                        </span>
+                      </div>
+                    )}
+                    
+                    {!isVerified && step.criticFeedback && (
+                      <div className={`flex items-start gap-2 text-xs ${citation ? 'mt-1 pt-2 border-t border-rose-500/10' : ''}`}>
+                        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 text-rose-600 dark:text-rose-400 flex-shrink-0" />
+                        <div className="text-rose-700 dark:text-rose-300 leading-relaxed">
+                          <strong>Critic Feedback:</strong> 
+                          <div className="mt-1">
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkGfm, remarkMath]}
+                              rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+                            >
+                              {preprocessMath(step.criticFeedback)}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {isVerified && (
+                      <div className={`flex items-start gap-2 text-xs ${citation ? 'mt-1 pt-2 border-t border-emerald-500/10' : ''}`}>
+                        <ShieldCheck className="w-3.5 h-3.5 mt-0.5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                        <span className="text-emerald-700 dark:text-emerald-300 leading-relaxed">
+                          Step passed strict line-by-line verification.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </m.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preprocessMath, userId, chatId, messageId, onNotify }) => {
@@ -150,15 +263,29 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
                   ? 'Verified by Critic AI' 
                   : 'Honest Warning from Critic AI'}
           </h3>
-          <p className="text-xs opacity-90 mt-1.5 leading-relaxed">
+          <div className="text-xs opacity-90 mt-1.5 leading-relaxed">
             {isStreaming
               ? 'The Critic AI will begin verification once the derivation is complete.'
               : isVerifying
                 ? 'The Critic AI is currently line-by-line verifying this derivation against standard NCERT curriculum.'
                 : isVerified 
                   ? 'This derivation has been line-by-line verified against standard NCERT curriculum.' 
-                  : data.criticAuditNotes || 'This question involves out-of-scope concepts or tricky assumptions. Do not trust the derivation completely.'}
-          </p>
+                  : (
+                    <>
+                      <span className="font-semibold block mb-1">Here's specifically why:</span>
+                      {data.criticAuditNotes ? (
+                        <ReactMarkdown 
+                          remarkPlugins={[remarkGfm, remarkMath]}
+                          rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+                        >
+                          {preprocessMath(data.criticAuditNotes)}
+                        </ReactMarkdown>
+                      ) : (
+                        'This question involves out-of-scope concepts or tricky assumptions. Do not trust the derivation completely.'
+                      )}
+                    </>
+                  )}
+          </div>
           {!isVerified && !isVerifying && onNotify && userId && (
             <button 
               onClick={handleFlagForReview}
@@ -212,52 +339,15 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
       {data.steps && data.steps.length > 0 && (
         <div className="space-y-4">
           {data.steps.map((step: any, idx: number) => (
-            <div key={idx} className="bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 p-4 rounded-2xl space-y-3 relative overflow-hidden">
-              <div className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-2">
-                <span className="text-xs font-bold text-[#2563EB] uppercase tracking-wider">Step {step.stepNumber || idx + 1}: {step.title || 'Step'}</span>
-                {!isVerifying && !isStreaming && (
-                  step.verified ? (
-                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                  ) : (
-                    <XCircle className="w-4 h-4 text-rose-500" />
-                  )
-                )}
-              </div>
-              
-              {step.description && (
-                <div className="text-sm leading-relaxed">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
-                  >
-                    {preprocessMath(step.description)}
-                  </ReactMarkdown>
-                </div>
-              )}
-              
-              {step.mathBlock && (
-                <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 p-3 rounded-xl overflow-x-auto my-2 text-sm">
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
-                  >
-                    {preprocessMath(step.mathBlock)}
-                  </ReactMarkdown>
-                </div>
-              )}
-              
-              {!isVerifying && !step.verified && step.criticFeedback && (
-                <div className="mt-2 text-xs text-rose-600 dark:text-rose-400 bg-rose-500/10 p-2.5 rounded-lg border border-rose-500/20 leading-relaxed">
-                  <strong>Critic Alert:</strong>
-                  <ReactMarkdown 
-                    remarkPlugins={[remarkGfm, remarkMath]}
-                    rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
-                  >
-                    {preprocessMath(step.criticFeedback)}
-                  </ReactMarkdown>
-                </div>
-              )}
-            </div>
+            <StepItem 
+              key={idx} 
+              step={step} 
+              idx={idx} 
+              isVerifying={isVerifying} 
+              isStreaming={isStreaming} 
+              preprocessMath={preprocessMath} 
+              globalCitation={data.citation} 
+            />
           ))}
         </div>
       )}

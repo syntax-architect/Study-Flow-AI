@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { 
   getUserChats, createChat, getChatMessages, 
   getUserMastery, getCohortAnalytics, getPersonalCohortAnalytics, getRecommendations,
-  deleteChat, deleteAllUserChats, renameChat, toggleMessagePin, flagForReview, toggleChatPin
+  deleteChat, deleteAllUserChats, renameChat, toggleMessagePin, flagForReview, toggleChatPin,
+  getReviewQueue, resolveReview
 } from '../controllers/db.controller';
 
 const router = Router();
@@ -20,5 +21,7 @@ router.get('/analytics/cohorts/me', getPersonalCohortAnalytics);
 router.get('/analytics/cohorts', getCohortAnalytics);
 router.get('/recommendations/:userId', getRecommendations);
 router.post('/flag-for-review', flagForReview);
+router.get('/review-queue', getReviewQueue);
+router.post('/review-queue/:reviewId/resolve', resolveReview);
 
 export default router;
