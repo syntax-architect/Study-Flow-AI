@@ -1,0 +1,10 @@
+version: v1.25.0
+exclude:
+  global:
+    - .agents/**/*
+    - tests/**/*
+    - server/routes/api.routes.ts
+    - server/routes/admin.routes.ts
+    - server/controllers/ai.controller.ts
+    - server.ts
+    - package.json

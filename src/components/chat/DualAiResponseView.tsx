@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SolverResult } from '../../types';
-import { ShieldCheck, AlertTriangle, BookOpen, CheckCircle2, XCircle, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, BookOpen, CheckCircle2, XCircle, RefreshCw, ChevronDown, ChevronUp, BrainCircuit } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -129,6 +129,87 @@ const StepItem = ({ step, idx, isVerifying, isStreaming, preprocessMath, globalC
     </div>
   );
 }
+
+const InterventionCard = ({ intervention, preprocessMath }: { intervention: any, preprocessMath: (s: string) => string }) => {
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+
+  const handleOptionSelect = (index: number) => {
+    if (showExplanation) return;
+    setSelectedOption(index);
+    setShowExplanation(true);
+  };
+
+  return (
+    <div className="bg-indigo-50/50 dark:bg-indigo-500/5 border border-indigo-500/20 rounded-2xl p-5 my-6 relative overflow-hidden shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <BrainCircuit className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+        <h4 className="font-bold text-indigo-900 dark:text-indigo-100 text-sm tracking-wide">Knowledge Check Intervention</h4>
+      </div>
+      
+      <div className="text-zinc-800 dark:text-zinc-200 mb-5 text-sm leading-relaxed">
+        <ReactMarkdown 
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+        >
+          {preprocessMath(intervention.question)}
+        </ReactMarkdown>
+      </div>
+
+      <div className="space-y-2">
+        {intervention.options.map((option: string, idx: number) => {
+          let optionClass = "border-black/5 dark:border-white/5 hover:border-indigo-500/30 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/10 cursor-pointer text-zinc-700 dark:text-zinc-300";
+          if (showExplanation) {
+            if (idx === intervention.correctIndex) {
+              optionClass = "border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200";
+            } else if (idx === selectedOption) {
+              optionClass = "border-rose-500/50 bg-rose-50/50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-200";
+            } else {
+              optionClass = "border-black/5 dark:border-white/5 opacity-50 cursor-not-allowed";
+            }
+          }
+          
+          return (
+            <div 
+              key={idx}
+              onClick={() => handleOptionSelect(idx)}
+              className={`p-3 rounded-xl border transition-all ${optionClass} text-sm flex items-start gap-3`}
+            >
+              <div className="mt-0.5 w-4 h-4 rounded-full border border-current flex-shrink-0 flex items-center justify-center">
+                {showExplanation && idx === intervention.correctIndex && <CheckCircle2 className="w-3 h-3" />}
+                {showExplanation && idx === selectedOption && idx !== intervention.correctIndex && <XCircle className="w-3 h-3" />}
+              </div>
+              <div>
+                <ReactMarkdown 
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+                >
+                  {preprocessMath(option)}
+                </ReactMarkdown>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      {showExplanation && (
+        <m.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-5 p-4 rounded-xl bg-white/60 dark:bg-black/20 border border-black/5 dark:border-white/5 text-sm leading-relaxed"
+        >
+          <span className="font-bold block mb-1">Explanation:</span>
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[[rehypeKatex, { strict: false, throwOnError: false }]]}
+          >
+            {preprocessMath(intervention.explanation)}
+          </ReactMarkdown>
+        </m.div>
+      )}
+    </div>
+  );
+};
 
 export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preprocessMath, userId, chatId, messageId, onNotify }) => {
   const isVerified = data.criticAuditStatus === 'VERIFIED';
@@ -316,6 +397,15 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
         <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50 p-3 rounded-xl flex items-center gap-2 text-xs text-zinc-900 dark:text-zinc-50 opacity-80">
           <BookOpen className="w-4 h-4 text-[#2563EB]" />
           <span>Source: {data.citation.textbook}, {data.citation.chapter} {data.citation.ncertPage && `(Page ${data.citation.ncertPage})`}</span>
+        </div>
+      )}
+
+      {/* Interventions */}
+      {data.intervention && data.intervention.length > 0 && (
+        <div className="space-y-4">
+          {data.intervention.map((inv, idx) => (
+            <InterventionCard key={idx} intervention={inv} preprocessMath={preprocessMath} />
+          ))}
         </div>
       )}
 

@@ -22,14 +22,19 @@ export const supabase = createClient(
 );
 
 export const getAuthSupabase = (token?: string) => {
-  if (supabaseAdminKey) {
+  if (token) {
     return createClient(
       supabaseUrl,
-      supabaseAdminKey,
+      supabaseKey,
       {
         auth: {
           autoRefreshToken: false,
           persistSession: false
+        },
+        global: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         }
       }
     );

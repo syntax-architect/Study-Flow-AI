@@ -72,6 +72,12 @@ export interface SolverResult {
   stepVerdicts?: StepVerdict[];
   pipelineLog?: DualAiPipelineLog;
   isOutOfScope?: boolean;
+  intervention?: {
+    question: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+  }[];
 }
 
 export interface VaultProblem {

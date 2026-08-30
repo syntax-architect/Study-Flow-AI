@@ -776,12 +776,12 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
     };
     const langName = languageMap[language] || language;
 
+    let intent = 'HARD_ACADEMIC';
     try {
       if (query.length < 1000) {
         const primaryClient = this.getPrimaryClient();
         const shortHistory = messages.slice(-4).map(m => ({ role: m.role, content: m.content }));
         
-        let intent = 'ACADEMIC';
         const normalizedQuery = query.toLowerCase().trim();
         const casualGreetings = ['hello', 'hi', 'hey', 'yo', 'sup', 'what\'s up', 'whats up', 'how are you', 'good morning', 'good evening', 'good afternoon', 'write a python script', 'write a script'];
         
@@ -794,27 +794,29 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
             const intentRes = await client.chat.completions.create({
               model: routerModel,
               messages: [
-                { role: 'system', content: 'You are a strict router. Classify the user\'s message into EXACTLY one word: "ACADEMIC" or "CONVERSATION". No punctuation or explanation.\n- Output "ACADEMIC" ONLY for complex physics, math, chemistry, or rigorous science problems that require numeric calculation, mathematical derivation, formulas, or a step-by-step analytical solver.\n- Output "CONVERSATION" for everything else, including general knowledge, writing help, coding, conceptual definitions, casual reasoning, small talk, and greetings.' },
+                { role: 'system', content: 'You are a strict router. Classify the user\'s message into EXACTLY one word: "HARD_ACADEMIC", "EASY_ACADEMIC", or "CONVERSATION". No punctuation or explanation.\n- Output "HARD_ACADEMIC" ONLY for complex physics, math, chemistry, or rigorous science problems that require numeric calculation, mathematical derivation, formulas, or a step-by-step analytical solver.\n- Output "EASY_ACADEMIC" for simple factual academic questions, definitions, or basic conceptual explanations.\n- Output "CONVERSATION" for everything else, including general knowledge, writing help, coding, casual reasoning, small talk, and greetings.' },
                 { role: 'user', content: 'Solve 2x^2 + 5x - 3 = 0' },
-                { role: 'assistant', content: 'ACADEMIC' },
+                { role: 'assistant', content: 'HARD_ACADEMIC' },
+                { role: 'user', content: 'What is Newton\'s first law?' },
+                { role: 'assistant', content: 'EASY_ACADEMIC' },
                 { role: 'user', content: 'Write a python script to parse JSON' },
                 { role: 'assistant', content: 'CONVERSATION' },
                 { role: 'user', content: 'What caused the fall of the Roman Empire?' },
                 { role: 'assistant', content: 'CONVERSATION' },
                 { role: 'user', content: 'Calculate the tension in the rope if mass is 5kg and a=2m/s^2' },
-                { role: 'assistant', content: 'ACADEMIC' },
+                { role: 'assistant', content: 'HARD_ACADEMIC' },
                 { role: 'user', content: 'Hello bro' },
                 { role: 'assistant', content: 'CONVERSATION' },
                 { role: 'user', content: 'What is a black hole?' },
-                { role: 'assistant', content: 'CONVERSATION' },
+                { role: 'assistant', content: 'EASY_ACADEMIC' },
                 { role: 'user', content: query }
               ],
               max_tokens: 5,
               temperature: 0.1
             });
-            intent = intentRes.choices[0].message.content?.trim().toUpperCase() || 'ACADEMIC';
+            intent = intentRes.choices[0].message.content?.trim().toUpperCase() || 'HARD_ACADEMIC';
           } catch (e) {
-            console.warn('[AI Engine] LLM Router failed, assuming ACADEMIC.', e);
+            console.warn('[AI Engine] LLM Router failed, assuming HARD_ACADEMIC.', e);
           }
         }
 
@@ -993,36 +995,48 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
         if (onEvent) {
           onEvent({ type: 'solver_chunk', data: { content: token } });
         }
-      }),
-      this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.5),
-      this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.7)
+      })
     ];
-
-    const [solverDataPrimary, solverDataSample2, solverDataSample3] = await Promise.all(solverPromises);
-    const solverData = solverDataPrimary;
     
-    const eq1 = solverDataPrimary.finalEquation || '';
-    const eq2 = solverDataSample2.finalEquation || '';
-    const eq3 = solverDataSample3.finalEquation || '';
-
-    let samplesDisagree = false;
-    try {
-      const primaryClient = this.getPrimaryClient();
-      const compareRes = await primaryClient.chat.completions.create({
-        model: config.primaryAiModel,
-        messages: [{ role: 'system', content: `Are these mathematical answers fundamentally equivalent? Answer ONLY "YES" or "NO".\n\nAnswer 1: ${eq1}\nAnswer 2: ${eq2}\nAnswer 3: ${eq3}` }],
-        max_tokens: 5,
-        temperature: 0.1
-      });
-      if (compareRes.choices[0]?.message?.content?.trim().toUpperCase().includes('NO')) {
-        samplesDisagree = true;
-      }
-    } catch (e) {
-      const clean = (s: string) => s.replace(/\s+/g, '').toLowerCase();
-      samplesDisagree = !(clean(eq1) === clean(eq2) && clean(eq2) === clean(eq3));
+    // Only run consensus (extra solvers) if the query is a hard academic problem
+    if (intent === 'HARD_ACADEMIC') {
+      solverPromises.push(
+        this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.5),
+        this.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.7)
+      );
     }
 
-    console.log(`[AI Engine] Primary derivation (T=0.3) shown to student. Consensus check: ${samplesDisagree ? 'DISAGREED' : 'AGREED'}. Eq1: ${eq1}, Eq2: ${eq2}, Eq3: ${eq3}`);
+    const solverResults = await Promise.all(solverPromises);
+    const solverDataPrimary = solverResults[0];
+    const solverData = solverDataPrimary;
+    
+    let samplesDisagree = false;
+    
+    if (intent === 'HARD_ACADEMIC' && solverResults.length === 3) {
+      const eq1 = solverResults[0].finalEquation || '';
+      const eq2 = solverResults[1].finalEquation || '';
+      const eq3 = solverResults[2].finalEquation || '';
+
+      try {
+        const primaryClient = this.getPrimaryClient();
+        const compareRes = await primaryClient.chat.completions.create({
+          model: config.primaryAiModel,
+          messages: [{ role: 'system', content: `Are these mathematical answers fundamentally equivalent? Answer ONLY "YES" or "NO".\n\nAnswer 1: ${eq1}\nAnswer 2: ${eq2}\nAnswer 3: ${eq3}` }],
+          max_tokens: 5,
+          temperature: 0.1
+        });
+        if (compareRes.choices[0]?.message?.content?.trim().toUpperCase().includes('NO')) {
+          samplesDisagree = true;
+        }
+      } catch (e) {
+        const clean = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+        samplesDisagree = !(clean(eq1) === clean(eq2) && clean(eq2) === clean(eq3));
+      }
+
+      console.log(`[AI Engine] Primary derivation (T=0.3) shown to student. Consensus check: ${samplesDisagree ? 'DISAGREED' : 'AGREED'}. Eq1: ${eq1}, Eq2: ${eq2}, Eq3: ${eq3}`);
+    } else {
+      console.log(`[AI Engine] EASY_ACADEMIC intent detected. Skipped 3-solver consensus to save latency.`);
+    }
 
     if (onEvent) {
       onEvent({ type: 'solver_draft', data: solverData });
@@ -1128,8 +1142,13 @@ CRITICAL RULES FOR AUDIT:
       }
     }
 
+    let effectiveConfidenceScore = criticData.confidenceScore;
+    if (samplesDisagree && typeof effectiveConfidenceScore === 'number') {
+      effectiveConfidenceScore = Math.min(effectiveConfidenceScore, 60);
+    }
+
     let finalStatus = 'FLAGGED';
-    if (criticData.criticAuditStatus === 'VERIFIED' && typeof criticData.confidenceScore === 'number' && criticData.confidenceScore >= 75) {
+    if (criticData.criticAuditStatus === 'VERIFIED' && typeof effectiveConfidenceScore === 'number' && effectiveConfidenceScore >= 75) {
       finalStatus = 'VERIFIED';
     }
 
@@ -1182,7 +1201,12 @@ CRITICAL RULES FOR AUDIT:
       finalSolverData = correctedSolverData;
       finalCriticData = reCriticData;
       
-      if (reCriticData.criticAuditStatus === 'VERIFIED' && typeof reCriticData.confidenceScore === 'number' && reCriticData.confidenceScore >= 75) {
+      let reEffectiveConfidenceScore = reCriticData.confidenceScore;
+      if (samplesDisagree && typeof reEffectiveConfidenceScore === 'number') {
+        reEffectiveConfidenceScore = Math.min(reEffectiveConfidenceScore, 60);
+      }
+
+      if (reCriticData.criticAuditStatus === 'VERIFIED' && typeof reEffectiveConfidenceScore === 'number' && reEffectiveConfidenceScore >= 75) {
         finalStatus = 'VERIFIED';
       } else {
         finalStatus = 'FLAGGED';
@@ -1219,7 +1243,7 @@ CRITICAL RULES FOR AUDIT:
       }
     }
 
-    const finalResponse = {
+    const finalResponse: any = {
       ...finalSolverData,
       criticAuditStatus: finalStatus,
       isOutOfScope: finalCriticData.isOutOfScope,
@@ -1231,6 +1255,32 @@ CRITICAL RULES FOR AUDIT:
         ...(finalCriticData.pipelineLog || {})
       }
     };
+
+    if (finalStatus === 'FLAGGED') {
+      try {
+        console.log(`[AI Engine] Response FLAGGED. Triggering Intervention Agent...`);
+        const primaryClient = this.getPrimaryClient();
+        const interventionRes = await primaryClient.chat.completions.create({
+          model: config.primaryAiModel,
+          messages: [
+            { role: 'system', content: 'You are an educational Intervention Agent. The student failed to understand a concept or asked a flawed question. Based on the critic notes, generate a 2-question multiple-choice micro-quiz to test their core understanding before they can proceed. Output ONLY valid JSON matching this schema: { "interventions": [ { "question": "string", "options": ["string", "string", "string", "string"], "correctIndex": number, "explanation": "string" } ] }' },
+            { role: 'user', content: `Topic: ${subject}\nQuestion: ${query}\nCritic Notes: ${finalCriticData.criticAuditNotes}` }
+          ],
+          response_format: { type: 'json_object' }
+        });
+        
+        const interventionData = JSON.parse(interventionRes.choices[0].message.content || '{}');
+        finalResponse.intervention = interventionData.interventions || null;
+      } catch (err) {
+        console.warn(`[AI Engine] Intervention Agent failed:`, err);
+      }
+
+      if ((finalCriticData.confidenceScore || 0) < 50) {
+        delete finalResponse.steps;
+        delete finalResponse.finalEquation;
+        delete finalResponse.citation;
+      }
+    }
 
     appCache.set(cacheKey, finalResponse, 3600 * 24);
     

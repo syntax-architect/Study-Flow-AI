@@ -1,16 +1,16 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { ingestDocument } from '../scripts/ingest';
-import fs from 'fs';
-import crypto from 'crypto';
-
-import path from 'path';
+import * as fs from 'fs';
+import * as crypto from 'crypto';
+import * as path from 'path';
 
 const router = Router();
 
 // Configure multer for file uploads with validation
 const upload = multer({ 
   dest: 'server/data/',
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     if (ext !== '.md' && ext !== '.txt' && ext !== '.pdf') {
@@ -48,7 +48,7 @@ router.get('/system/health', adminAuth, (req: Request, res: Response) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-router.post('/ingest', adminLimiter, adminAuth, upload.single('file'), async (req: Request, res: Response) => {
+router.post('/ingest', adminLimiter, adminAuth, upload.single('file'), async (req: any, res: any) => {
   try {
     const { subject, chapter } = req.body;
     const file = req.file;

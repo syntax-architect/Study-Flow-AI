@@ -68,6 +68,6 @@ describe('AiService', () => {
       [{ role: 'user', content: 'test' }],
       schema,
       'test_schema'
-    )).rejects.toThrow(/AI Engine Exhausted all keys/);
+    )).rejects.toThrow(/Exhausted/);
   });
 });

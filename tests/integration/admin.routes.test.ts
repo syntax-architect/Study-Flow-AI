@@ -5,6 +5,7 @@ import adminRoutes from '../../server/routes/admin.routes';
 import { globalLimiter } from '../../server/middlewares/rateLimiter';
 
 const app = express();
+app.disable('x-powered-by');
 app.use(express.json());
 app.use(globalLimiter);
 app.use('/api/admin', adminRoutes);

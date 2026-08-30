@@ -13,10 +13,14 @@ export const getUserChats = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'User ID is required' });
     }
 
+    if (userId !== (req as any).user?.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const client = getClient(req);
     const { data, error } = await client
       .from('chats')
-      .select('*')
+      .select('id, title, created_at, user_id, is_pinned')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -83,6 +87,10 @@ export const getUserMastery = async (req: Request, res: Response, next: NextFunc
     const { userId } = req.params;
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    if (userId !== (req as any).user?.id) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
 
     const client = getClient(req);
@@ -237,6 +245,10 @@ export const getRecommendations = async (req: Request, res: Response, next: Next
       return res.status(400).json({ error: 'User ID is required' });
     }
 
+    if (userId !== (req as any).user?.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const client = getClient(req);
     const { data, error } = await client
       .from('user_topic_mastery')
@@ -298,6 +310,10 @@ export const deleteChat = async (req: Request, res: Response, next: NextFunction
     const { chatId } = req.params;
     if (!chatId) return res.status(400).json({ error: 'Chat ID is required' });
 
+    if (req.params.userId && req.params.userId !== (req as any).user?.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const client = getClient(req);
     const { error } = await client.from('chats').delete().eq('id', chatId);
 
@@ -312,6 +328,10 @@ export const deleteAllUserChats = async (req: Request, res: Response, next: Next
   try {
     const { userId } = req.params;
     if (!userId) return res.status(400).json({ error: 'User ID is required' });
+
+    if (userId !== (req as any).user?.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
     const client = getClient(req);
     // Because RLS is active, this will only delete chats where user_id matches the authenticated token

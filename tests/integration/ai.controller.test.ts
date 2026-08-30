@@ -5,6 +5,7 @@ import { handleChatStream } from '../../server/controllers/ai.controller';
 import { solverCriticRateLimiter } from '../../server/middlewares/rateLimiter';
 
 const app = express();
+app.disable('x-powered-by');
 app.use(express.json());
 app.post('/api/chat-stream', solverCriticRateLimiter, handleChatStream);
 
@@ -26,7 +27,7 @@ describe('AI Controller - Stream', () => {
   it('should return 400 if messages are missing', async () => {
     const response = await request(app)
       .post('/api/chat-stream')
-      .send({ userId: 'user_1' });
+      .send({ userId: process.env.TEST_USER_ID || 'mocked_user_id' });
     
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('messages array cannot be empty');
@@ -35,7 +36,7 @@ describe('AI Controller - Stream', () => {
   it('should stream data correctly', async () => {
     const response = await request(app)
       .post('/api/chat-stream')
-      .send({ messages: [{ role: 'user', content: 'Hi' }], userId: 'user_1' })
+      .send({ messages: [{ role: 'user', content: 'Hi' }], userId: process.env.TEST_USER_ID || 'mocked_user_id' })
       .expect('Content-Type', /text\/event-stream/);
 
     expect(response.status).toBe(200);

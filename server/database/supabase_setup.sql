@@ -1,5 +1,16 @@
 -- Run this SQL in your Supabase SQL Editor to create the necessary tables for Chat History
 
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    role TEXT DEFAULT 'student',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read own profile" ON public.users;
+CREATE POLICY "Users can read own profile" ON public.users FOR SELECT USING ((auth.jwt() ->> 'sub') = id);
+GRANT ALL ON public.users TO anon, authenticated;
+
 CREATE TABLE IF NOT EXISTS public.chats (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -265,3 +276,12 @@ CREATE POLICY "Service role can insert usage"
     FOR INSERT
     TO service_role
     WITH CHECK (true);
+
+-- ==========================================
+-- Performance Indices
+-- ==========================================
+CREATE INDEX IF NOT EXISTS idx_chats_user_id ON public.chats(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON public.messages(chat_id);
+CREATE INDEX IF NOT EXISTS idx_review_queue_user_id ON public.review_queue(user_id);
+CREATE INDEX IF NOT EXISTS idx_review_queue_status ON public.review_queue(status);
+CREATE INDEX IF NOT EXISTS idx_documents_embedding_hnsw ON public.documents USING hnsw (embedding vector_cosine_ops);

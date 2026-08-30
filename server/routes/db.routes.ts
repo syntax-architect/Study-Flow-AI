@@ -5,6 +5,7 @@ import {
   deleteChat, deleteAllUserChats, renameChat, toggleMessagePin, flagForReview, toggleChatPin,
   getReviewQueue, resolveReview, getFlaggedStudents
 } from '../controllers/db.controller';
+import { requireTeacher } from '../middlewares/auth';
 
 const router = Router();
 
@@ -21,8 +22,8 @@ router.get('/analytics/cohorts/me', getPersonalCohortAnalytics);
 router.get('/analytics/cohorts', getCohortAnalytics);
 router.get('/recommendations/:userId', getRecommendations);
 router.post('/flag-for-review', flagForReview);
-router.get('/review-queue', getReviewQueue);
-router.post('/review-queue/:reviewId/resolve', resolveReview);
-router.get('/intervention/flagged-students', getFlaggedStudents);
+router.get('/review-queue', requireTeacher, getReviewQueue);
+router.post('/review-queue/:reviewId/resolve', requireTeacher, resolveReview);
+router.get('/intervention/flagged-students', requireTeacher, getFlaggedStudents);
 
 export default router;

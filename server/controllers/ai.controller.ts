@@ -1,4 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { AiService } from '../services/ai.service';
 import { BhashiniService } from '../services/bhashini.service';
 import { supabase, getAuthSupabase } from '../lib/supabase';
@@ -14,7 +17,7 @@ const getClient = (req: Request) => {
 export const handleSolverCritic = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { query, subject = 'NCERT Class 11 Physics', chatId, userId, language = 'en', messages = [] } = req.body;
-    
+
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
     }
@@ -64,7 +67,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       };
 
       const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, onEvent, userId, token);
-      
+
       finalResponse = {
         id: 'sol-' + Date.now(),
         query,
@@ -121,7 +124,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       res.end();
     } else {
       const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, undefined, userId, token);
-      
+
       finalResponse = {
         id: 'sol-' + Date.now(),
         query,
@@ -194,7 +197,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
 export const handleAuditTopic = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { topicTitle, subtitle, unit } = req.body;
-    
+
     if (!topicTitle || !unit) {
       return res.status(400).json({ error: 'topicTitle and unit are required' });
     }
@@ -262,7 +265,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
         }]);
         if (userErr) console.error("Error saving user message:", userErr);
       }
-      
+
       if (fullAssistantContent) {
         const { error: astErr } = await getClient(req).from('messages').insert([{
           chat_id: chatId,
@@ -292,13 +295,14 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
 
 export const handleVoiceTranscribe = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.file) {
+    const file = (req as any).file;
+    if (!file) {
       return res.status(400).json({ error: 'No audio file uploaded' });
     }
 
-    const fs = require('fs');
-    const filePath = req.file.path;
-    const language = req.body.language || 'en';
+    // Sanitize the file path to prevent Path Traversal
+    const filePath = path.resolve(os.tmpdir(), path.basename(file.path));
+    const language = (req.body as any).language || 'en';
 
     const transcription = await BhashiniService.transcribeAudio(filePath, language);
 
@@ -317,12 +321,15 @@ export const handleVoiceTranscribe = async (req: Request, res: Response, next: N
 export const handleTextToSpeech = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { text, language } = req.body;
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required for TTS' });
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'Text is required and must be a string' });
+    }
+    if (text.length > 5000) {
+      return res.status(400).json({ error: 'Text exceeds maximum allowed length of 5000 characters' });
     }
 
     const audioBuffer = await BhashiniService.textToSpeech(text, language || 'en');
-    
+
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Length', audioBuffer.length);
     res.send(audioBuffer);
@@ -340,7 +347,7 @@ export const handleVisionOCR = async (req: Request, res: Response, next: NextFun
 
     const { buffer, mimetype } = req.file;
     const transcribedText = await AiService.performVisionOCR(buffer, mimetype);
-    
+
     res.json({ text: transcribedText });
   } catch (err: any) {
     console.error('Vision OCR Error:', err);
@@ -351,21 +358,27 @@ export const handleVisionOCR = async (req: Request, res: Response, next: NextFun
 export const handleStudyRoomModerate = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { messages, currentParticipants } = req.body;
-    
+
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array cannot be empty' });
     }
+    if (messages.length > 100) {
+      return res.status(400).json({ error: 'Too many messages' });
+    }
+    if (!currentParticipants || !Array.isArray(currentParticipants)) {
+      return res.status(400).json({ error: 'currentParticipants must be an array' });
+    }
 
     const lastMessage = messages[messages.length - 1];
-    
+
     if (!lastMessage.content.includes('?') && lastMessage.content.length < 15) {
-       return res.json({ response: null }); 
+      return res.json({ response: null });
     }
 
     const otherParticipants = currentParticipants.filter((p: string) => p !== lastMessage.name);
-    
+
     if (otherParticipants.length === 0) {
-       return res.json({ response: "I see you're asking a question! Let's wait a moment to see if anyone else joins the room who might know the answer, or I can help if you want!" });
+      return res.json({ response: "I see you're asking a question! Let's wait a moment to see if anyone else joins the room who might know the answer, or I can help if you want!" });
     }
 
     const randomPeer = otherParticipants[Math.floor(Math.random() * otherParticipants.length)];
