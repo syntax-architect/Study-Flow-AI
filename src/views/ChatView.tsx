@@ -2,19 +2,18 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { SEO } from '../components/common/SEO';
 
-import { Bot, User, Send, RefreshCw, Copy, Check, CheckCircle2, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square, AudioLines } from 'lucide-react';
+import { Bot, User, Send, RefreshCw, Copy, Check, CheckCircle2, MessageSquare, Plus, Menu, X, Sparkles, Trash2, Edit2, Pin, PinOff, Search, Mic, MicOff, Camera, Languages, Square, AudioLines, BarChart3, Code, FileText, Bug } from 'lucide-react';
 import { playSound } from '../utils/sound';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import { ChatMessageItem } from '../components/chat/ChatMessageItem';
 import { ToastType } from '../components/common/Toast';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import { parsePartialSolverJSON } from '../utils/partialJson';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { ChatMessage, ChatSession } from '../types';
-import 'katex/dist/katex.min.css';
+
+const ChatMessageItem = React.lazy(() => import('../components/chat/ChatMessageItem').then(m => ({ default: m.ChatMessageItem })));
+import { ChatEmptyState } from '../components/chat/ChatEmptyState';
+import { ChatSidebar } from '../components/chat/ChatSidebar';
+import { ChatInputBar } from '../components/chat/ChatInputBar';
 
 export interface ChatViewProps {
   messages: ChatMessage[];
@@ -47,7 +46,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const isManualSwitch = useRef<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState(propSoundEnabled);
   
-  const [subject, setSubject] = useState('NCERT Class 11 Physics');
+  const [subject, setSubject] = useState('Software Engineering');
   
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -314,13 +313,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
   const presetQueries = [
     {
-      label: '1. Basic Question',
-      text: 'A car of mass 1500 kg drives at 20 m/s on a flat circular turn of radius 50 m with μ_s = 0.6. Will it skid?',
+      label: 'Analyze Data',
+      text: 'Analyze the recent user engagement dataset and give me the top 3 insights.',
+      icon: <BarChart3 className="w-4 h-4 text-blue-500" />
     },
     {
-      label: '2. Misconception Trap',
-      text: 'A block of 5 kg rests on a rough table with μ_s = 0.4. A horizontal force of 10 N is applied. Is static friction equal to 19.6 N?',
+      label: 'Review Code',
+      text: 'Can you review my React component for performance issues and security vulnerabilities?',
+      icon: <Code className="w-4 h-4 text-emerald-500" />
     },
+    {
+      label: 'Draft Strategy',
+      text: 'Draft a go-to-market strategy for a new B2B AI product.',
+      icon: <FileText className="w-4 h-4 text-purple-500" />
+    },
+    {
+      label: 'Debug Issue',
+      text: 'Help me debug this error message: "Cannot read properties of undefined"',
+      icon: <Bug className="w-4 h-4 text-rose-500" />
+    }
   ];
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -593,147 +604,33 @@ export const ChatView: React.FC<ChatViewProps> = ({
       </button>
 
       {/* Sidebar for Chat History */}
-      <div className={`
-        absolute md:static inset-y-0 left-0 z-40 w-60 bg-zinc-50 dark:bg-[#1E1F20] flex flex-col transition-transform duration-300 ease-in-out pt-16 md:pt-4
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
-        <div className="px-4 py-2 flex items-center gap-2 mb-4 md:hidden">
-          <div className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-white/[0.06] border border-zinc-200/80 dark:border-white/[0.06] flex items-center justify-center flex-shrink-0 overflow-hidden shadow-sm">
-            <img src="/logo.jpg" alt="StudyFlow AI" className="w-full h-full object-cover" />
-          </div>
-          <span className="font-semibold text-zinc-900 dark:text-zinc-100 text-lg tracking-tight">StudyFlow</span>
-        </div>
-
-        <div className="px-3 space-y-1">
-          <button 
-            onClick={() => {
-              isManualSwitch.current = true;
-              setActiveChatId(null);
-              setSidebarOpen(false);
-            }}
-            className="w-full flex items-center gap-3 text-zinc-700 dark:text-zinc-300 py-2.5 px-3 rounded-full text-sm font-medium hover:bg-zinc-200 dark:hover:bg-white/[0.08] active:scale-[0.98] transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            New chat
-          </button>
-          {isSearchActive ? (
-            <div className="relative mt-2">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input 
-                type="text"
-                autoFocus
-                placeholder="Search chats..."
-                value={chatSearchQuery}
-                onChange={(e) => setChatSearchQuery(e.target.value)}
-                onBlur={() => { if (!chatSearchQuery) setIsSearchActive(false); }}
-                className="w-full bg-zinc-200/50 dark:bg-white/[0.04] border border-transparent dark:border-white/[0.06] text-zinc-900 dark:text-zinc-200 text-sm rounded-full pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500/40 transition-all placeholder:text-zinc-500"
-              />
-            </div>
-          ) : (
-            <button 
-              onClick={() => setIsSearchActive(true)}
-              className="w-full flex items-center gap-3 text-zinc-700 dark:text-zinc-300 py-2.5 px-3 rounded-full text-sm font-medium hover:bg-zinc-200 dark:hover:bg-white/[0.08] active:scale-[0.98] transition-all"
-            >
-              <Search className="w-4 h-4" />
-              Search chats
-            </button>
-          )}
-          
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="w-full flex items-center gap-3 text-zinc-700 dark:text-zinc-300 py-2.5 px-3 rounded-full text-sm font-medium hover:bg-zinc-200 dark:hover:bg-white/[0.08] active:scale-[0.98] transition-all"
-          >
-            <Camera className="w-4 h-4" />
-            Images
-          </button>
-        </div>
-
-        <div className="mt-8 px-5 pb-2">
-          <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Recents</span>
-        </div>
-
-        
-        <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-[#E2E8F0] dark:scrollbar-thumb-[#1E293B] p-3 space-y-1">
-          {chats
-            .filter(c => c.title.toLowerCase().includes(chatSearchQuery.toLowerCase()))
-            .sort((a, b) => {
-              if (a.is_pinned && !b.is_pinned) return -1;
-              if (!a.is_pinned && b.is_pinned) return 1;
-              return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-            })
-            .map(chat => (
-            <div
-              key={chat.id}
-              className={`group w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg premium-transition text-sm cursor-pointer ${
-                activeChatId === chat.id 
-                  ? 'bg-zinc-100 dark:bg-white/[0.06] font-semibold text-zinc-900 dark:text-white' 
-                  : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-white/[0.03] hover:text-zinc-900 dark:hover:text-white'
-              }`}
-            >
-              {editingChatId === chat.id ? (
-                <input
-                  type="text"
-                  value={editChatTitle}
-                  onChange={(e) => setEditChatTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRenameChat(chat.id)}
-                  autoFocus
-                  onBlur={() => handleRenameChat(chat.id)}
-                  className="bg-transparent border-b border-black/20 dark:border-white/20 text-xs focus:outline-none flex-1 truncate py-1"
-                />
-              ) : (
-                <button
-                  onClick={() => {
-                    isManualSwitch.current = true;
-                    setActiveChatId(chat.id);
-                    setSidebarOpen(false);
-                  }}
-                  className="flex items-center gap-2 flex-1 text-left truncate min-w-0"
-                >
-                  <MessageSquare className={`w-4 h-4 flex-shrink-0 ${activeChatId === chat.id ? 'text-blue-500' : 'text-zinc-400'}`} />
-                  <span className="truncate">{chat.title}</span>
-                  {chat.is_pinned && <Pin className="w-3 h-3 flex-shrink-0 text-amber-400" />}
-                </button>
-              )}
-              
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleToggleChatPin(chat.id, chat.is_pinned); }}
-                  className={`p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 ${chat.is_pinned ? 'text-amber-500 opacity-100' : 'text-zinc-900 dark:text-zinc-50 opacity-60 hover:opacity-100'}`}
-                  title={chat.is_pinned ? "Unpin Chat" : "Pin Chat"}
-                >
-                  {chat.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-                </button>
-                {editingChatId !== chat.id && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setEditChatTitle(chat.title); setEditingChatId(chat.id); }}
-                    className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded-md text-zinc-900 dark:text-zinc-50 opacity-60 hover:opacity-100"
-                    title="Rename"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleDeleteChat(chat.id); }}
-                  className="p-1 hover:bg-red-500/10 rounded-md text-red-500 opacity-60 hover:opacity-100"
-                  title="Delete"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
-          {chats.length === 0 && !chatSearchQuery && (
-            <div className="text-center text-xs font-medium text-[#94A3B8] p-4">
-              No chat history yet
-            </div>
-          )}
-          {chats.length > 0 && chatSearchQuery && chats.filter(c => c.title.toLowerCase().includes(chatSearchQuery.toLowerCase())).length === 0 && (
-            <div className="text-center text-xs font-medium text-[#94A3B8] p-4">
-              No results found
-            </div>
-          )}
-        </div>
-      </div>
+      <ChatSidebar
+        sidebarOpen={sidebarOpen}
+        chats={chats}
+        activeChatId={activeChatId}
+        chatSearchQuery={chatSearchQuery}
+        isSearchActive={isSearchActive}
+        editingChatId={editingChatId}
+        editChatTitle={editChatTitle}
+        onNewChat={() => {
+          isManualSwitch.current = true;
+          setActiveChatId(null);
+          setSidebarOpen(false);
+        }}
+        onSelectChat={(chatId) => {
+          isManualSwitch.current = true;
+          setActiveChatId(chatId);
+          setSidebarOpen(false);
+        }}
+        onSearchChange={setChatSearchQuery}
+        onSearchToggle={setIsSearchActive}
+        onEditStart={(chatId, title) => { setEditChatTitle(title); setEditingChatId(chatId); }}
+        onEditTitleChange={setEditChatTitle}
+        onRenameChat={handleRenameChat}
+        onToggleChatPin={handleToggleChatPin}
+        onDeleteChat={handleDeleteChat}
+        onImageUpload={() => fileInputRef.current?.click()}
+      />
 
       {/* Main Chat Area */}
       <div className="flex-1 min-h-0 flex flex-col h-full bg-white dark:bg-[#131314] relative">
@@ -744,29 +641,26 @@ export const ChatView: React.FC<ChatViewProps> = ({
         >
           <AnimatePresence mode="popLayout">
           {messages.length === 0 && (
-            <m.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.4 }}
-              className="flex flex-col items-center justify-center h-full min-h-[40vh] gap-4"
-            >
-              <h1 className="text-3xl md:text-4xl font-medium text-transparent bg-clip-text bg-gradient-to-r from-zinc-800 to-zinc-500 dark:from-zinc-100 dark:to-zinc-400 text-center">
-                What can I help with, {user?.firstName || 'Agnishwar'}?
-              </h1>
-            </m.div>
+            <ChatEmptyState 
+              userName={user?.firstName || 'Agnishwar'}
+              presetQueries={presetQueries}
+              soundEnabled={soundEnabled}
+              onSubmit={handleSubmit}
+            />
           )}
 
           {messages.map((msg, i) => (
-            <ChatMessageItem 
-              key={msg.id}
-              msg={msg}
-              onTogglePin={handleTogglePin}
-              userId={userId}
-              activeChatId={activeChatId}
-              onNotify={onNotify}
-              onEditMessage={handleEditMessage}
-            />
+            <React.Suspense key={msg.id} fallback={<div className="animate-pulse bg-zinc-200 dark:bg-white/5 rounded-2xl h-32 w-full max-w-[85%] mt-2"></div>}>
+              <ChatMessageItem 
+                msg={msg}
+                onTogglePin={handleTogglePin}
+                userId={userId}
+                activeChatId={activeChatId}
+                onNotify={onNotify}
+                onEditMessage={handleEditMessage}
+                onSuggestionClick={(q) => handleSubmit(undefined, q)}
+              />
+            </React.Suspense>
           ))}
 
           {loading && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
@@ -828,187 +722,36 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </div>
 
         {/* Input Container */}
-        <div className="px-4 md:px-8 pt-3 pb-6 md:pb-8 w-full max-w-3xl mx-auto flex flex-col items-center">
-          <div className="w-full bg-zinc-100 dark:bg-[#1E1F20] rounded-[32px] p-2 pr-4 shadow-sm relative transition-all focus-within:ring-2 focus-within:ring-white/10 flex flex-col">
-            {/* Context & Language Selectors */}
-            <div className="px-3 pt-2 pb-1 border-b border-black/5 dark:border-white/5 mx-2 mb-1 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Subject Context</span>
-              <select
-                value={subject}
-                onChange={(e) => setSubject(e.target.value)}
-                className="bg-transparent dark:bg-[#1E1F20] text-xs font-semibold text-zinc-700 dark:text-zinc-200 focus:outline-none cursor-pointer text-right"
-              >
-                <option value="NCERT Class 11 Physics">Physics (Class 11)</option>
-                <option value="NCERT Class 11 Chemistry">Chemistry (Class 11)</option>
-                <option value="NCERT Class 11 Mathematics">Mathematics (Class 11)</option>
-              </select>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">🌐 Language</span>
-                <select
-                  value={language}
-                  onChange={(e) => {
-                    setLanguage(e.target.value);
-                    localStorage.setItem('preferred_language', e.target.value);
-                  }}
-                  className="bg-transparent dark:bg-[#1E1F20] text-xs font-semibold text-zinc-700 dark:text-zinc-200 focus:outline-none cursor-pointer text-right"
-                >
-                  <option value="en">English</option>
-                  <option value="hi">हिंदी (Hindi)</option>
-                  <option value="bn">বাংলা (Bengali)</option>
-                  <option value="ta">தமிழ் (Tamil)</option>
-                  <option value="mr">मराठी (Marathi)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Demo Preset Chips - only show on empty chat */}
-            {!activeChatId && messages.length === 0 && (
-              <m.div 
-                initial="hidden"
-                animate="visible"
-                variants={{
-                  visible: { transition: { staggerChildren: 0.1 } },
-                  hidden: {}
-                }}
-                className="absolute bottom-full mb-4 left-0 flex flex-col items-center justify-center w-full gap-4 px-4"
-              >
-                <m.div variants={{ hidden: { opacity: 0, y: 10 }, visible: { opacity: 1, y: 0 } }}>
-                  <h2 className="text-xl md:text-2xl font-bold text-zinc-800 dark:text-zinc-100 mb-1 text-center">
-                    What would you like to learn today?
-                  </h2>
-                  <p className="text-zinc-500 dark:text-zinc-400 text-sm text-center">
-                    Ask a question, upload a problem, or start a derivation.
-                  </p>
-                </m.div>
-
-                <div className="flex flex-wrap items-center justify-center gap-2 overflow-x-auto w-full scrollbar-none">
-                  {presetQueries.map((preset, idx) => (
-                  <m.button
-                    variants={{
-                      hidden: { opacity: 0, y: 10, scale: 0.9 },
-                      visible: { opacity: 1, y: 0, scale: 1 }
-                    }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      playSound('click', soundEnabled);
-                      handleSubmit(undefined, preset.text);
-                    }}
-                    className="px-4 py-2 bg-zinc-100 dark:bg-[#1E1F20] rounded-full text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white transition-all flex-shrink-0 cursor-pointer shadow-sm"
-                  >
-                    {preset.label}
-                  </m.button>
-                ))}
-                </div>
-              </m.div>
-            )}
-
-            <form onSubmit={(e) => handleSubmit(e)} className="flex items-center gap-2 w-full">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessingImage}
-                className="cursor-pointer text-zinc-400 hover:text-zinc-900 dark:hover:text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ml-1"
-                title="Upload image"
-              >
-                {isProcessingImage ? (
-                  <RefreshCw className="w-5 h-5 animate-spin text-zinc-300" />
-                ) : (
-                  <Plus className="w-6 h-6 text-zinc-300 dark:text-zinc-400" />
-                )}
-              </button>
-              
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleImageUpload} 
-              />
-
-              <textarea
-                ref={inputRef as any}
-                value={userPrompt}
-                onChange={(e) => {
-                  setUserPrompt(e.target.value);
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 150)}px`;
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!loading && (userPrompt.trim() || isListening)) {
-                      handleSubmit(e);
-                    }
-                  }
-                }}
-                placeholder="Ask StudyFlow..."
-                className="flex-1 bg-transparent px-2 py-3.5 text-base text-zinc-900 dark:text-zinc-100 focus:outline-none placeholder:text-zinc-500 resize-none overflow-y-auto scrollbar-none"
-                style={{ minHeight: '52px', maxHeight: '150px' }}
-                rows={1}
-                disabled={loading}
-              />
-              
-              <div className="flex items-center gap-2 flex-shrink-0">
-
-
-                <button
-                  type="button"
-                  onClick={toggleMediaRecording}
-                  title="Record audio (Server Transcription)"
-                  className={`cursor-pointer w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isMediaRecording ? 'text-blue-500 bg-blue-500/10 animate-pulse' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-white/5'}`}
-                >
-                  <AudioLines className="w-5 h-5" />
-                </button>
-
-                {isSupported && (
-                  <button
-                    type="button"
-                    onClick={toggleListening}
-                    title="Dictate (Browser)"
-                    className={`cursor-pointer w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${isListening ? 'text-rose-500 bg-rose-500/10' : 'text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-white/5'}`}
-                  >
-                    {isListening ? (
-                      <MicOff className="w-5 h-5" />
-                    ) : (
-                      <Mic className="w-5 h-5 text-zinc-300 dark:text-zinc-400" />
-                    )}
-                  </button>
-                )}
-
-                {loading ? (
-                  <button
-                    type="button"
-                    onClick={handleStop}
-                    className="cursor-pointer text-zinc-400 hover:text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all bg-white/5 hover:bg-white/10"
-                    title="Stop generating"
-                  >
-                    <Square className="w-4 h-4 fill-current" />
-                  </button>
-                ) : userPrompt.trim() && (
-                  <m.button
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    type="submit"
-                    className="cursor-pointer text-zinc-300 dark:text-zinc-200 hover:text-white w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all bg-zinc-800 dark:bg-white/5 hover:bg-zinc-700 dark:hover:bg-white/10"
-                  >
-                    <Send className="w-4 h-4" />
-                  </m.button>
-                )}
-              </div>
-            </form>
-          </div>
-          
-          <div className="mt-3 text-[11px] text-zinc-500 dark:text-zinc-500/80 text-center">
-            StudyFlow is AI and can make mistakes.
-          </div>
-        </div>
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          accept="image/*" 
+          className="hidden" 
+          onChange={handleImageUpload} 
+        />
+        <ChatInputBar
+          subject={subject}
+          language={language}
+          userPrompt={userPrompt}
+          loading={loading}
+          isListening={isListening}
+          isSupported={isSupported}
+          isProcessingImage={isProcessingImage}
+          soundEnabled={soundEnabled}
+          onSubjectChange={setSubject}
+          onLanguageChange={(val) => {
+            setLanguage(val);
+            localStorage.setItem('preferred_language', val);
+          }}
+          onPromptChange={(val) => {
+            setUserPrompt(val);
+          }}
+          onSubmit={handleSubmit}
+          onStop={handleStop}
+          onImageClick={() => fileInputRef.current?.click()}
+          onToggleListening={toggleListening}
+          inputRef={inputRef as any}
+        />
       
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && (

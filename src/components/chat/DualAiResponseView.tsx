@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useAuth } from '@clerk/clerk-react';
+import confetti from 'canvas-confetti';
 
 interface Props {
   data: Omit<Partial<SolverResult>, 'criticAuditStatus'> & { criticAuditStatus?: 'VERIFIED' | 'FLAGGED' | 'VERIFYING' | 'STREAMING' };
@@ -15,6 +16,7 @@ interface Props {
   chatId?: string | null;
   messageId?: string;
   onNotify?: (msg: string, type: 'success' | 'warning' | 'info') => void;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
 const StepItem = ({ step, idx, isVerifying, isStreaming, preprocessMath, globalCitation }: any) => {
@@ -462,6 +464,7 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
          prevProps.userId === nextProps.userId &&
          prevProps.chatId === nextProps.chatId &&
          prevProps.onNotify === nextProps.onNotify &&
+         prevProps.onSuggestionClick === nextProps.onSuggestionClick &&
          prevProps.preprocessMath === nextProps.preprocessMath &&
          JSON.stringify(prevProps.data) === JSON.stringify(nextProps.data);
 });

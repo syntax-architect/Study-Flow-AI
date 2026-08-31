@@ -10,11 +10,11 @@ export const config = {
   
   solverAiApiKey: process.env.SOLVER_AI_API_KEY || process.env.PRIMARY_AI_API_KEY,
   solverAiBaseUrl: process.env.SOLVER_AI_BASE_URL || process.env.PRIMARY_AI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
-  solverAiModel: process.env.SOLVER_AI_MODEL || 'gemini-1.5-flash',
+  solverAiModel: process.env.SOLVER_AI_MODEL || process.env.PRIMARY_AI_MODEL || 'gemini-1.5-flash',
   
   criticAiApiKey: process.env.CRITIC_AI_API_KEY || process.env.SECONDARY_AI_API_KEY,
   criticAiBaseUrl: process.env.CRITIC_AI_BASE_URL || process.env.SECONDARY_AI_BASE_URL || 'https://openrouter.ai/api/v1',
-  criticAiModel: process.env.CRITIC_AI_MODEL || 'anthropic/claude-3-haiku',
+  criticAiModel: process.env.CRITIC_AI_MODEL || process.env.SECONDARY_AI_MODEL || 'anthropic/claude-3-haiku',
   
   visionAiModel: process.env.VISION_AI_MODEL || 'gpt-4o',
   multilingualAiModel: process.env.MULTILINGUAL_AI_MODEL || 'gpt-4o-mini',

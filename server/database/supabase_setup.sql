@@ -73,8 +73,12 @@ CREATE TABLE IF NOT EXISTS public.documents (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     content TEXT NOT NULL,
     metadata JSONB,
-    embedding vector(384) -- 384 dimensions for all-MiniLM-L6-v2
+    embedding vector(384), -- 384 dimensions for all-MiniLM-L6-v2
+    fts tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
 );
+
+-- Safely add fts column if table already exists
+ALTER TABLE public.documents ADD COLUMN IF NOT EXISTS fts tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED;
 
 -- 3. Set up RLS for documents (optional but good practice)
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
@@ -110,6 +114,58 @@ AS $$
     AND (filter_chapter IS NULL OR (documents.metadata->>'chapter') = filter_chapter)
   ORDER BY documents.embedding <=> query_embedding
   LIMIT match_count;
+$$;
+
+-- 5. Create the match_documents_hybrid function for Hybrid Search (Vector + BM25 with RRF)
+CREATE OR REPLACE FUNCTION match_documents_hybrid (
+  query_text text,
+  query_embedding vector(384),
+  match_count int,
+  filter_subject text DEFAULT NULL,
+  filter_chapter text DEFAULT NULL,
+  rrf_k int DEFAULT 60
+)
+RETURNS TABLE (
+  id uuid,
+  content text,
+  metadata jsonb,
+  similarity float
+)
+LANGUAGE sql STABLE
+AS $$
+WITH keyword_search AS (
+  SELECT id,
+         ts_rank_cd(fts, websearch_to_tsquery('english', query_text)) AS fts_score,
+         ROW_NUMBER() OVER(ORDER BY ts_rank_cd(fts, websearch_to_tsquery('english', query_text)) DESC) AS keyword_rank
+  FROM documents
+  WHERE websearch_to_tsquery('english', query_text) @@ fts
+    AND (filter_subject IS NULL OR (metadata->>'subject') = filter_subject)
+    AND (filter_chapter IS NULL OR (metadata->>'chapter') = filter_chapter)
+),
+vector_search AS (
+  SELECT id,
+         1 - (embedding <=> query_embedding) AS vec_score,
+         ROW_NUMBER() OVER(ORDER BY embedding <=> query_embedding) AS vector_rank
+  FROM documents
+  WHERE (filter_subject IS NULL OR (metadata->>'subject') = filter_subject)
+    AND (filter_chapter IS NULL OR (metadata->>'chapter') = filter_chapter)
+  LIMIT 50
+),
+hybrid_results AS (
+  SELECT 
+    d.id, 
+    d.content, 
+    d.metadata,
+    COALESCE(1.0 / (rrf_k + v.vector_rank), 0.0) + COALESCE(1.0 / (rrf_k + k.keyword_rank), 0.0) AS rrf_score
+  FROM documents d
+  LEFT JOIN vector_search v ON d.id = v.id
+  LEFT JOIN keyword_search k ON d.id = k.id
+  WHERE v.id IS NOT NULL OR k.id IS NOT NULL
+  ORDER BY rrf_score DESC
+  LIMIT match_count
+)
+SELECT id, content, metadata, rrf_score as similarity
+FROM hybrid_results;
 $$;
 
 -- ==========================================
@@ -285,3 +341,61 @@ CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON public.messages(chat_id);
 CREATE INDEX IF NOT EXISTS idx_review_queue_user_id ON public.review_queue(user_id);
 CREATE INDEX IF NOT EXISTS idx_review_queue_status ON public.review_queue(status);
 CREATE INDEX IF NOT EXISTS idx_documents_embedding_hnsw ON public.documents USING hnsw (embedding vector_cosine_ops);
+
+CREATE INDEX IF NOT EXISTS idx_documents_fts ON public.documents USING GIN (fts);
+
+
+-- ==========================================
+-- Long-Term Memory (LTM) Setup
+-- ==========================================
+
+-- 1. Create the user_memories table
+CREATE TABLE IF NOT EXISTS public.user_memories (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    embedding vector(384),
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 2. Setup RLS
+ALTER TABLE public.user_memories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can read own memories" ON public.user_memories;
+DROP POLICY IF EXISTS "Service role can write memories" ON public.user_memories;
+
+CREATE POLICY "Users can read own memories" ON public.user_memories 
+FOR SELECT USING ((auth.jwt() ->> 'sub') = user_id);
+
+CREATE POLICY "Service role can write memories" ON public.user_memories 
+FOR INSERT TO service_role WITH CHECK (true);
+
+GRANT ALL ON public.user_memories TO anon, authenticated;
+
+-- 3. Create HNSW index
+CREATE INDEX IF NOT EXISTS idx_user_memories_embedding_hnsw ON public.user_memories USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_user_memories_user_id ON public.user_memories(user_id);
+
+-- 4. Create the match_user_memories function
+CREATE OR REPLACE FUNCTION match_user_memories (
+  p_user_id text,
+  query_embedding vector(384),
+  match_threshold float,
+  match_count int
+)
+RETURNS TABLE (
+  id uuid,
+  content text,
+  similarity float
+)
+LANGUAGE sql STABLE
+AS $$
+  SELECT
+    id,
+    content,
+    1 - (embedding <=> query_embedding) AS similarity
+  FROM user_memories
+  WHERE user_id = p_user_id
+    AND 1 - (embedding <=> query_embedding) > match_threshold
+  ORDER BY embedding <=> query_embedding
+  LIMIT match_count;
+$$;

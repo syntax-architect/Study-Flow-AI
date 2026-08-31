@@ -7,9 +7,9 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 import { DualAiResponseView } from './DualAiResponseView';
 import { ToastType } from '../common/Toast';
-import 'katex/dist/katex.min.css';
 
 interface ChatMessageItemProps {
   msg: ChatMessage;
@@ -18,9 +18,10 @@ interface ChatMessageItemProps {
   activeChatId: string | null;
   onNotify: (msg: string, type: ToastType) => void;
   onEditMessage?: (msgId: string, newContent: string) => void;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
-export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeChatId, onNotify, onEditMessage }: ChatMessageItemProps) => {
+export const ChatMessageItem = React.memo(({ msg, onTogglePin, userId, activeChatId, onNotify, onEditMessage, onSuggestionClick }: ChatMessageItemProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(msg.content);
   const { getToken } = useAuth();
@@ -105,38 +106,16 @@ if (typeof msg.content === 'object') {
       <div className={`bg-[#FAFAFA] dark:bg-[#18181B] border border-black/5 dark:border-white/5 shadow-sm rounded-2xl rounded-tl-sm px-5 py-4 text-[14px] text-gray-800 dark:text-gray-200 leading-relaxed prose prose-sm max-w-none prose-p:leading-relaxed overflow-x-auto relative group ${msg.is_pinned ? 'ring-2 ring-amber-400 dark:ring-amber-500/50' : ''}`}>
         <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={() => onNotify?.("Translating explanation to regional language (Demo)...", "info")}
-            className="p-1.5 text-zinc-900 dark:text-zinc-50 opacity-50 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-all flex items-center gap-1"
-            title="Translate Explanation"
+            disabled
+            className="cursor-not-allowed p-1.5 text-zinc-900 dark:text-zinc-50 opacity-30 rounded-md transition-all flex items-center gap-1"
+            title="Coming soon"
           >
             <Languages className="w-3.5 h-3.5 text-zinc-900 dark:text-zinc-50" />
           </button>
           <button
-            onClick={async () => {
-              onNotify?.("Preparing audio playback...", "info");
-              try {
-                const token = await getToken();
-                const res = await fetch('/api/text-to-speech', {
-                  method: 'POST',
-                  headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                  },
-                  body: JSON.stringify({ 
-                    text: textToRender, 
-                    language: localStorage.getItem('preferred_language') || 'en' 
-                  })
-                });
-                if (!res.ok) throw new Error('Audio fetch failed');
-                const blob = await res.blob();
-                const audio = new Audio(URL.createObjectURL(blob));
-                audio.play();
-              } catch (e) {
-                onNotify?.("Failed to play audio", "error");
-              }
-            }}
-            className="p-1.5 text-zinc-900 dark:text-zinc-50 opacity-50 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-all flex items-center gap-1"
-            title="Read Aloud (Bhashini TTS)"
+            disabled
+            className="cursor-not-allowed p-1.5 text-zinc-900 dark:text-zinc-50 opacity-30 rounded-md transition-all flex items-center gap-1"
+            title="Coming soon"
           >
             <Volume2 className="w-3.5 h-3.5" />
           </button>
@@ -253,5 +232,6 @@ if (typeof msg.content === 'object') {
          prevProps.activeChatId === nextProps.activeChatId &&
          prevProps.userId === nextProps.userId &&
          prevProps.onTogglePin === nextProps.onTogglePin &&
-         prevProps.onNotify === nextProps.onNotify;
+         prevProps.onNotify === nextProps.onNotify &&
+         prevProps.onSuggestionClick === nextProps.onSuggestionClick;
 });

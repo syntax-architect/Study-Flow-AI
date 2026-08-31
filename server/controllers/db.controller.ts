@@ -1,9 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase, getAuthSupabase } from '../lib/supabase';
+import { supabase, getAuthSupabase, adminSupabase } from '../lib/supabase';
 
 const getClient = (req: Request) => {
-  const tokenHeader = req.headers.authorization?.split(' ')[1];
-  return getAuthSupabase(tokenHeader);
+  return adminSupabase;
 };
 
 export const getUserChats = async (req: Request, res: Response, next: NextFunction) => {

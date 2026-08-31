@@ -1,3 +1,4 @@
+import { logger } from '../utils/logger';
 import { Request, Response, NextFunction } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -16,7 +17,7 @@ const getClient = (req: Request) => {
 
 export const handleSolverCritic = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { query, subject = 'NCERT Class 11 Physics', chatId, userId, language = 'en', messages = [] } = req.body;
+    const { query, subject = 'Software Engineering', chatId, userId, language = 'en', messages = [] } = req.body;
 
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
@@ -78,31 +79,31 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
 
       // Save user message to DB // FIX: Bug 6
       if (chatId && finalResponse) { // FIX: Bug 6
-        console.log(`[AI Controller] Saving user message to chat ${chatId}`);
+        logger.debug(`[AI Controller] Saving user message to chat ${chatId}`);
         const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
           chat_id: chatId, // FIX: Bug 6
           role: 'user', // FIX: Bug 6
           content: query // FIX: Bug 6
         }]); // FIX: Bug 6
         if (userErr) {
-          console.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
+          logger.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
         } else {
-          console.log("[AI Controller] User message saved successfully.");
+          logger.debug("[AI Controller] User message saved successfully.");
         }
       } // FIX: Bug 6
 
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
-        console.log(`[AI Controller] Saving assistant message to chat ${chatId}`);
+        logger.debug(`[AI Controller] Saving assistant message to chat ${chatId}`);
         const { error: astErr } = await getClient(req).from('messages').insert([{
           chat_id: chatId,
           role: 'assistant',
           content: JSON.stringify(finalResponse)
         }]);
         if (astErr) {
-          console.error("[AI Controller] Error saving assistant message:", astErr);
+          logger.error("[AI Controller] Error saving assistant message:", astErr);
         } else {
-          console.log("[AI Controller] Assistant message saved successfully.");
+          logger.debug("[AI Controller] Assistant message saved successfully.");
         }
       }
 
@@ -117,7 +118,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
           p_topic_title: topicTitle,
           p_is_verified: isVerified
         });
-        if (masteryErr) console.error("Error upserting mastery:", masteryErr);
+        if (masteryErr) logger.error("Error upserting mastery:", masteryErr);
       }
 
       res.write(`event: critic_verdict\ndata: ${JSON.stringify(finalResponse)}\n\n`);
@@ -135,31 +136,31 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
 
       // Save user message to DB // FIX: Bug 6
       if (chatId && finalResponse) { // FIX: Bug 6
-        console.log(`[AI Controller] Saving user message to chat ${chatId} (non-stream)`);
+        logger.debug(`[AI Controller] Saving user message to chat ${chatId} (non-stream)`);
         const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
           chat_id: chatId, // FIX: Bug 6
           role: 'user', // FIX: Bug 6
           content: query // FIX: Bug 6
         }]); // FIX: Bug 6
         if (userErr) {
-          console.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
+          logger.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
         } else {
-          console.log("[AI Controller] User message saved successfully.");
+          logger.debug("[AI Controller] User message saved successfully.");
         }
       } // FIX: Bug 6
 
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
-        console.log(`[AI Controller] Saving assistant message to chat ${chatId} (non-stream)`);
+        logger.debug(`[AI Controller] Saving assistant message to chat ${chatId} (non-stream)`);
         const { error: astErr } = await getClient(req).from('messages').insert([{
           chat_id: chatId,
           role: 'assistant',
           content: JSON.stringify(finalResponse)
         }]);
         if (astErr) {
-          console.error("[AI Controller] Error saving assistant message:", astErr);
+          logger.error("[AI Controller] Error saving assistant message:", astErr);
         } else {
-          console.log("[AI Controller] Assistant message saved successfully.");
+          logger.debug("[AI Controller] Assistant message saved successfully.");
         }
       }
 
@@ -174,7 +175,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
           p_topic_title: topicTitle,
           p_is_verified: isVerified
         });
-        if (masteryErr) console.error("Error upserting mastery:", masteryErr);
+        if (masteryErr) logger.error("Error upserting mastery:", masteryErr);
       }
 
       res.json(finalResponse);
@@ -186,7 +187,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         res.write(`event: error\ndata: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`);
         res.end();
       } else {
-        console.error('Error after stream ended:', err);
+        logger.error('Error after stream ended:', err);
       }
     } else {
       next(err);
@@ -263,7 +264,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
           role: 'user',
           content: originalUserContent
         }]);
-        if (userErr) console.error("Error saving user message:", userErr);
+        if (userErr) logger.error("Error saving user message:", userErr);
       }
 
       if (fullAssistantContent) {
@@ -272,7 +273,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
           role: 'assistant',
           content: fullAssistantContent
         }]);
-        if (astErr) console.error("Error saving assistant message:", astErr);
+        if (astErr) logger.error("Error saving assistant message:", astErr);
       }
     }
 
@@ -285,7 +286,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
         res.write(`data: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`);
         res.end();
       } else {
-        console.error('Error after chat stream ended:', err);
+        logger.error('Error after chat stream ended:', err);
       }
     } else {
       next(err);
@@ -308,12 +309,12 @@ export const handleVoiceTranscribe = async (req: Request, res: Response, next: N
 
     // Clean up the temporary file
     fs.unlink(filePath, (err: NodeJS.ErrnoException | null) => {
-      if (err) console.error('[Voice] Failed to delete temp audio file:', err);
+      if (err) logger.error('[Voice] Failed to delete temp audio file:', err);
     });
 
     res.json({ text: transcription });
   } catch (err: any) {
-    console.error('Voice transcription error:', err);
+    logger.error('Voice transcription error:', err);
     next(err);
   }
 };
@@ -334,7 +335,7 @@ export const handleTextToSpeech = async (req: Request, res: Response, next: Next
     res.setHeader('Content-Length', audioBuffer.length);
     res.send(audioBuffer);
   } catch (err: any) {
-    console.error('TTS error:', err);
+    logger.error('TTS error:', err);
     next(err);
   }
 };
@@ -350,7 +351,7 @@ export const handleVisionOCR = async (req: Request, res: Response, next: NextFun
 
     res.json({ text: transcribedText });
   } catch (err: any) {
-    console.error('Vision OCR Error:', err);
+    logger.error('Vision OCR Error:', err);
     res.status(500).json({ error: err.message || 'Failed to process image' });
   }
 };

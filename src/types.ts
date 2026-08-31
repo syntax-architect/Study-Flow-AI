@@ -72,6 +72,9 @@ export interface SolverResult {
   stepVerdicts?: StepVerdict[];
   pipelineLog?: DualAiPipelineLog;
   isOutOfScope?: boolean;
+  studentMastery?: boolean;
+  suggestedFollowUps?: string[];
+  explanationComplexity?: 'ELI5' | 'Standard' | 'Advanced';
   intervention?: {
     question: string;
     options: string[];

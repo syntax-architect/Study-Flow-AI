@@ -41,3 +41,14 @@ export const getAuthSupabase = (token?: string) => {
   }
   return supabase;
 };
+
+export const adminSupabase = createClient(
+  supabaseUrl,
+  supabaseAdminKey || supabaseKey, // Fallback if no admin key
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
