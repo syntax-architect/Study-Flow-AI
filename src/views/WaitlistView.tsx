@@ -6,12 +6,38 @@ import { Sparkles, ArrowRight, CheckCircle2 } from 'lucide-react';
 export const WaitlistView: React.FC = () => {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    setSubmitted(true);
-    // You would typically send the email to your backend/DB here
+    
+    setLoading(true);
+    setError('');
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/api/waitlist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to join waitlist');
+      }
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -71,16 +97,21 @@ export const WaitlistView: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email address"
-                className="w-full bg-zinc-100 dark:bg-[#1E1F20] border border-transparent focus:border-blue-500/30 focus:bg-white dark:focus:bg-[#131314] rounded-full py-4 pl-6 pr-32 outline-none transition-all text-zinc-900 dark:text-zinc-50"
+                disabled={loading}
+                className="w-full bg-zinc-100 dark:bg-[#1E1F20] border border-transparent focus:border-blue-500/30 focus:bg-white dark:focus:bg-[#131314] rounded-full py-4 pl-6 pr-32 outline-none transition-all text-zinc-900 dark:text-zinc-50 disabled:opacity-50"
                 required
               />
               <button 
                 type="submit"
-                className="absolute right-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium transition-all flex items-center gap-2 active:scale-95"
+                disabled={loading}
+                className="absolute right-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
               >
-                Join <ArrowRight className="w-4 h-4" />
+                {loading ? 'Joining...' : <>Join <ArrowRight className="w-4 h-4" /></>}
               </button>
             </div>
+            {error && (
+              <p className="mt-4 text-sm text-red-500">{error}</p>
+            )}
           </form>
         )}
       </m.div>

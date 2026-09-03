@@ -7,7 +7,6 @@ import { AiService } from '../services/ai.service';
 import { BhashiniService } from '../services/bhashini.service';
 import { supabase, getAuthSupabase } from '../lib/supabase';
 import { appCache } from '../utils/cache';
-import OpenAI from 'openai';
 import crypto from 'crypto';
 
 const getClient = (req: Request) => {
@@ -62,6 +61,8 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
           res.write(`event: solver_draft\ndata: ${JSON.stringify(partialResponse)}\n\n`);
         } else if (eventData.type === 'solver_chunk') {
           res.write(`event: solver_chunk\ndata: ${JSON.stringify(eventData.data)}\n\n`);
+        } else if (eventData.type === 'critic_chunk') {
+          res.write(`event: critic_chunk\ndata: ${JSON.stringify(eventData.data)}\n\n`);
         } else if (eventData.type === 'conversation_chunk') {
           res.write(`event: conversation_chunk\ndata: ${JSON.stringify(eventData.data)}\n\n`);
         }
@@ -77,20 +78,20 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         timestamp: new Date().toISOString(),
       };
 
-      // Save user message to DB // FIX: Bug 6
-      if (chatId && finalResponse) { // FIX: Bug 6
+      // Save user message to DB
+      if (chatId && finalResponse) {
         logger.debug(`[AI Controller] Saving user message to chat ${chatId}`);
-        const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
-          chat_id: chatId, // FIX: Bug 6
-          role: 'user', // FIX: Bug 6
-          content: query // FIX: Bug 6
-        }]); // FIX: Bug 6
+        const { error: userErr } = await getClient(req).from('messages').insert([{
+          chat_id: chatId,
+          role: 'user',
+          content: query
+        }]);
         if (userErr) {
-          logger.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
+          logger.error("[AI Controller] Error saving user message:", userErr);
         } else {
           logger.debug("[AI Controller] User message saved successfully.");
         }
-      } // FIX: Bug 6
+      }
 
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
@@ -134,20 +135,20 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         timestamp: new Date().toISOString(),
       };
 
-      // Save user message to DB // FIX: Bug 6
-      if (chatId && finalResponse) { // FIX: Bug 6
+      // Save user message to DB
+      if (chatId && finalResponse) {
         logger.debug(`[AI Controller] Saving user message to chat ${chatId} (non-stream)`);
-        const { error: userErr } = await getClient(req).from('messages').insert([{ // FIX: Bug 6
-          chat_id: chatId, // FIX: Bug 6
-          role: 'user', // FIX: Bug 6
-          content: query // FIX: Bug 6
-        }]); // FIX: Bug 6
+        const { error: userErr } = await getClient(req).from('messages').insert([{
+          chat_id: chatId,
+          role: 'user',
+          content: query
+        }]);
         if (userErr) {
-          logger.error("[AI Controller] Error saving user message:", userErr); // FIX: Bug 6
+          logger.error("[AI Controller] Error saving user message:", userErr);
         } else {
           logger.debug("[AI Controller] User message saved successfully.");
         }
-      } // FIX: Bug 6
+      }
 
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
@@ -213,7 +214,7 @@ export const handleAuditTopic = async (req: Request, res: Response, next: NextFu
 
 export const handleChatStream = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { messages, chatId, subject } = req.body; // FIX: Bug 5
+    const { messages, chatId, subject } = req.body;
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array cannot be empty' });
@@ -245,7 +246,7 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
       fullAssistantContent = cachedResponse;
       res.write(`data: ${JSON.stringify({ content: cachedResponse })}\n\n`);
     } else {
-      const stream = await AiService.streamChat(messages, systemInstruction, { subject }, userId, token); // FIX: Bug 5
+      const stream = await AiService.streamChat(messages, systemInstruction, { subject }, userId, token);
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || '';
         if (content) {
@@ -392,15 +393,25 @@ Your goal is to encourage peer-to-peer learning. Do NOT answer the question dire
 Instead, acknowledge the question and explicitly ask "${randomPeer}" (or anyone else) if they want to try answering it first. 
 Keep your response under 3 sentences, very friendly, and engaging.`;
 
-    const openai = new OpenAI();
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "system", content: prompt }],
-      temperature: 0.7,
-      max_tokens: 150
-    });
+    const moderationSchema = {
+      type: "object",
+      properties: {
+        response: { type: "string" }
+      },
+      required: ["response"],
+      additionalProperties: false
+    };
 
-    res.json({ response: response.choices[0].message.content });
+    const result = await AiService.executeWithFallback(
+      [{ role: "system", content: prompt }],
+      moderationSchema,
+      'moderation_response',
+      undefined,
+      'solver',
+      0.7
+    );
+
+    res.json({ response: result.response || null });
   } catch (err) {
     next(err);
   }

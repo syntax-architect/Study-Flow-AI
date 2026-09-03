@@ -473,6 +473,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
       let buffer = '';
       let accumulatedConversationText = '';
       let accumulatedSolverText = '';
+      let accumulatedCriticText = '';
       let hasSeenCorrection = false;
 
       while (true) {
@@ -512,6 +513,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               } else if (currentEvent === 'solver_chunk') {
                 if (parsed.isCorrection && !hasSeenCorrection) {
                   accumulatedSolverText = '';
+                  accumulatedCriticText = ''; // Reset critic text for re-evaluation
                   hasSeenCorrection = true;
                 }
                 accumulatedSolverText += parsed.content;
@@ -519,6 +521,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
                 // Parse the partial JSON for real-time streaming UI
                 const partialJson = parsePartialSolverJSON(accumulatedSolverText);
                 partialJson.criticAuditStatus = 'STREAMING'; // Indicates it's still being typed
+                if (accumulatedCriticText) {
+                  partialJson.criticStreamingReasoning = accumulatedCriticText;
+                }
 
                 const newContent = JSON.stringify(partialJson);
                 
@@ -526,6 +531,32 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   const exists = prev.some(m => m.id === assistantMessageId);
                   if (exists) return prev.map(m => m.id === assistantMessageId ? { ...m, content: newContent } : m);
                   return [...prev, { id: assistantMessageId, role: 'assistant', content: newContent }];
+                });
+              } else if (currentEvent === 'critic_chunk') {
+                if (parsed.isCorrection) {
+                  accumulatedCriticText += parsed.content;
+                } else {
+                  accumulatedCriticText += parsed.content;
+                }
+                
+                setMessages(prev => {
+                  const exists = prev.some(m => m.id === assistantMessageId);
+                  if (exists) {
+                    return prev.map(m => {
+                      if (m.id === assistantMessageId) {
+                        try {
+                          const existingJson = JSON.parse(m.content);
+                          existingJson.criticStreamingReasoning = accumulatedCriticText;
+                          existingJson.criticAuditStatus = 'VERIFYING';
+                          return { ...m, content: JSON.stringify(existingJson) };
+                        } catch (e) {
+                          return m;
+                        }
+                      }
+                      return m;
+                    });
+                  }
+                  return prev;
                 });
               } else if (currentEvent === 'conversation_chunk') {
                 accumulatedConversationText += parsed.content;

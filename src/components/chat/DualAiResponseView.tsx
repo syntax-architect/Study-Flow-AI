@@ -10,7 +10,7 @@ import { useAuth } from '@clerk/clerk-react';
 import confetti from 'canvas-confetti';
 
 interface Props {
-  data: Omit<Partial<SolverResult>, 'criticAuditStatus'> & { criticAuditStatus?: 'VERIFIED' | 'FLAGGED' | 'VERIFYING' | 'STREAMING' };
+  data: Omit<Partial<SolverResult>, 'criticAuditStatus'> & { criticAuditStatus?: 'VERIFIED' | 'FLAGGED' | 'VERIFYING' | 'STREAMING', criticStreamingReasoning?: string };
   preprocessMath: (s: string) => string;
   userId?: string;
   chatId?: string | null;
@@ -312,6 +312,31 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
           </div>
         </div>
       </div>
+
+      {/* Internal Reasoning Trace (Visible AI) */}
+      <AnimatePresence>
+        {isVerifying && data.criticStreamingReasoning && (
+          <m.div 
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-black text-green-400 p-4 rounded-xl font-mono text-[10px] sm:text-xs overflow-hidden shadow-inner"
+          >
+            <div className="flex items-center gap-2 mb-2 opacity-50 pb-2 border-b border-green-400/20">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-yellow-500"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+              </div>
+              <span className="uppercase tracking-widest text-[9px] font-bold text-white">Critic Internal Trace</span>
+            </div>
+            <div className="whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-green-400/20">
+              {data.criticStreamingReasoning}
+              <span className="inline-block w-1.5 h-3.5 ml-1 bg-green-400 animate-pulse align-middle"></span>
+            </div>
+          </m.div>
+        )}
+      </AnimatePresence>
 
       {/* Badge Header */}
       <div className={`p-4 rounded-2xl flex items-start gap-3 shadow-sm relative overflow-hidden ${

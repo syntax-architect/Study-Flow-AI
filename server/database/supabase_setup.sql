@@ -399,3 +399,26 @@ AS $$
   ORDER BY embedding <=> query_embedding
   LIMIT match_count;
 $$;
+
+-- ==========================================
+-- Waitlist Setup
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.waitlist (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.waitlist ENABLE ROW LEVEL SECURITY;
+
+-- Allow insert from anon (so anyone can join the waitlist)
+DROP POLICY IF EXISTS "Allow public inserts to waitlist" ON public.waitlist;
+CREATE POLICY "Allow public inserts to waitlist" ON public.waitlist
+    FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+-- Only service role can read waitlist
+DROP POLICY IF EXISTS "Service role can read waitlist" ON public.waitlist;
+CREATE POLICY "Service role can read waitlist" ON public.waitlist
+    FOR SELECT TO service_role USING (true);
+
+GRANT ALL ON public.waitlist TO anon, authenticated;

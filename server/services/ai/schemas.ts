@@ -41,7 +41,7 @@ export const getSolverSchema = () => ({
       additionalProperties: false
     }
   },
-  required: ["isSocratic", "citation", "pipelineLog"],
+  required: ["title", "summary", "steps", "finalEquation", "suggestedFollowUps", "explanationComplexity", "citation", "pipelineLog"],
   additionalProperties: false
 });
 
@@ -80,7 +80,7 @@ export const getCriticSchema = () => ({
       additionalProperties: false
     }
   },
-  required: ["criticAuditStatus", "isOutOfScope", "criticAuditNotes", "confidenceScore", "stepVerdicts", "pipelineLog"],
+  required: ["criticAuditStatus", "isOutOfScope", "newInsights", "criticAuditNotes", "confidenceScore", "studentMastery", "stepVerdicts", "pipelineLog"],
   additionalProperties: false
 });
 

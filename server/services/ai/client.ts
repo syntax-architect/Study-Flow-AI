@@ -31,6 +31,7 @@ export class AiClient {
     return new OpenAI({
       apiKey: config.primaryAiApiKey,
       baseURL: config.primaryAiBaseUrl,
+      dangerouslyAllowBrowser: true,
     });
   }
 
@@ -41,19 +42,20 @@ export class AiClient {
     return new OpenAI({
       apiKey: config.secondaryAiApiKey,
       baseURL: config.secondaryAiBaseUrl,
+      dangerouslyAllowBrowser: true,
     });
   }
 
   static getClientForProvider(provider: string) {
     if (provider.toLowerCase() === 'groq') {
       if (!config.groqApiKey) throw new Error('Missing GROQ_API_KEY');
-      return new OpenAI({ apiKey: config.groqApiKey, baseURL: config.groqBaseUrl });
+      return new OpenAI({ apiKey: config.groqApiKey, baseURL: config.groqBaseUrl, dangerouslyAllowBrowser: true });
     } else if (provider.toLowerCase() === 'openrouter') {
       if (!config.openrouterApiKey) throw new Error('Missing OPENROUTER_API_KEY');
-      return new OpenAI({ apiKey: config.openrouterApiKey, baseURL: config.openrouterBaseUrl });
+      return new OpenAI({ apiKey: config.openrouterApiKey, baseURL: config.openrouterBaseUrl, dangerouslyAllowBrowser: true });
     } else {
       if (!config.primaryAiApiKey) throw new Error(`Missing API key for provider ${provider}`);
-      return new OpenAI({ apiKey: config.primaryAiApiKey, baseURL: config.primaryAiBaseUrl });
+      return new OpenAI({ apiKey: config.primaryAiApiKey, baseURL: config.primaryAiBaseUrl, dangerouslyAllowBrowser: true });
     }
   }
 
@@ -77,43 +79,50 @@ export class AiClient {
   static async executeLoop(client: OpenAI, model: string, messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>, token?: string) {
     let currentMessages = [...messages];
 
+    // INJECT SCHEMA INTO SYSTEM PROMPT FOR OPEN-SOURCE MODELS
+    if (jsonSchema && Object.keys(jsonSchema).length > 0) {
+      if (currentMessages.length > 0 && currentMessages[0].role === 'system') {
+        currentMessages[0] = {
+          ...currentMessages[0],
+          content: currentMessages[0].content + `\n\nCRITICAL INSTRUCTION: You MUST return a JSON object that STRICTLY matches the following schema. Ensure ALL required properties are present. DO NOT wrap your output in \`\`\`json or any other markdown. Return raw JSON only:\n${JSON.stringify(jsonSchema, null, 2)}`
+        };
+      }
+    }
+
     while (true) {
       const response = await client.chat.completions.create({
         model,
         messages: currentMessages,
         ...(!(tools && tools.length > 0) ? {
-          response_format: { 
-            type: 'json_schema',
-            json_schema: { name: schemaName, strict: true, schema: jsonSchema }
-          }
+          // Omit response_format entirely to bypass Groq's strict server-side JSON validation
+          // We extract JSON from markdown manually in cleanContent below.
         } : {
-          // If tools are present, we omit response_format as Groq doesn't allow both.
-          // The system prompt must instruct the model to return JSON.
+          // If tools are present, we omit response_format
         }),
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(temperature !== undefined ? { temperature } : {}),
-        stream: !!onChunk && !(tools && tools.length > 0), // FIX: Bug 2
-        ...(!!onChunk && !(tools && tools.length > 0) ? { stream_options: { include_usage: true } } : {}) // FIX: Bug 1
+        stream: !!onChunk && !(tools && tools.length > 0),
+        ...(!!onChunk && !(tools && tools.length > 0) ? { stream_options: { include_usage: true } } : {})
       });
 
-      let tokensUsed = (response as any).usage?.total_tokens || 0; // FIX: Bug 1
+      let tokensUsed = (response as any).usage?.total_tokens || 0;
 
-      if (!!onChunk && !(tools && tools.length > 0)) { // FIX: Bug 2
+      if (!!onChunk && !(tools && tools.length > 0)) {
         let content = '';
         for await (const chunk of response as any) {
-          if (chunk.usage) tokensUsed = chunk.usage.total_tokens; // FIX: Bug 1
+          if (chunk.usage) tokensUsed = chunk.usage.total_tokens;
           const token = chunk.choices[0]?.delta?.content || '';
           if (token) {
             content += token;
             onChunk(token);
           }
         }
-        if (userId && endpoint && tokensUsed > 0) { // FIX: Bug 1
+        if (userId && endpoint && tokensUsed > 0) {
           const _client = token ? getAuthSupabase(token) : supabase;
-          _client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => { // FIX: Bug 1
-            if (error) logger.error('[Usage Logger] Error:', error); // FIX: Bug 1
-          }); // FIX: Bug 1
-        } // FIX: Bug 1
+          _client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => {
+            if (error) logger.error('[Usage Logger] Error:', error);
+          });
+        }
         if (content) {
           try {
             return JSON.parse(content);
@@ -125,12 +134,12 @@ export class AiClient {
         return {};
       }
 
-      if (userId && endpoint && tokensUsed > 0) { // FIX: Bug 1
+      if (userId && endpoint && tokensUsed > 0) {
         const _client = token ? getAuthSupabase(token) : supabase;
-        _client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => { // FIX: Bug 1
-          if (error) logger.error('[Usage Logger] Error:', error); // FIX: Bug 1
-        }); // FIX: Bug 1
-      } // FIX: Bug 1
+        _client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => {
+          if (error) logger.error('[Usage Logger] Error:', error);
+        });
+      }
 
       const message = (response as any).choices[0].message;
       if (message.tool_calls && message.tool_calls.length > 0 && toolCallback) {
@@ -159,9 +168,9 @@ export class AiClient {
       }
 
       const content = message.content || '';
-      if (onChunk && content) { // FIX: Bug 2
-        onChunk(content); // FIX: Bug 2
-      } // FIX: Bug 2
+      if (onChunk && content) {
+        onChunk(content);
+      }
       let cleanContent = content;
       if (cleanContent) {
         const match = cleanContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -201,8 +210,8 @@ export class AiClient {
       let hasImage = false;
       let hasMultilingual = false;
 
-      const hindiRegex = /[\\u0900-\\u097F]/;
-      const bengaliRegex = /[\\u0980-\\u09FF]/;
+      const hindiRegex = /[\u0900-\u097F]/;
+      const bengaliRegex = /[\u0980-\u09FF]/;
 
       for (const msg of messages) {
         if (typeof msg.content === 'string') {
@@ -245,7 +254,7 @@ export class AiClient {
       }
 
       const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
-      const fallbackModel = fallbackProvider === 'groq' ? 'llama-3.1-8b-instant' : 'google/gemini-1.5-flash';
+      const fallbackModel = fallbackProvider === 'groq' ? 'qwen/qwen3.6-27b' : 'google/gemini-2.0-flash-001';
       logger.warn(`[AI Engine] Falling back to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'default'}...`);
       const fallbackClient = this.getClientForProvider(fallbackProvider);
 
@@ -282,8 +291,8 @@ export class AiClient {
     let hasImage = false;
     let hasMultilingual = false;
 
-    const hindiRegex = /[\\u0900-\\u097F]/;
-    const bengaliRegex = /[\\u0980-\\u09FF]/;
+    const hindiRegex = /[\u0900-\u097F]/;
+    const bengaliRegex = /[\u0980-\u09FF]/;
 
     for (const msg of messages) {
       if (typeof msg.content === 'string') {
@@ -331,6 +340,7 @@ export class AiClient {
       secondaryError = error;
     }
 
+    const fallbackErrors: any[] = [];
     if (config.fallbackApiKeys && config.fallbackApiKeys.length > 0) {
       for (let i = 0; i < config.fallbackApiKeys.length; i++) {
         try {
@@ -339,16 +349,18 @@ export class AiClient {
             apiKey: fallbackKey,
             baseURL: config.secondaryAiBaseUrl,
           });
-          const groqModelToUse = "llama-3.1-8b-instant";
+          const groqModelToUse = "qwen/qwen3.6-27b";
           logger.info(`[AI Engine] Attempting generation with Fallback API ${i + 1} (${groqModelToUse})...`);
           return await this.executeLoop(fallbackClient, groqModelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
         } catch (error) {
           logger.error(`[AI Engine] Fallback API ${i + 1} failed:`, error);
+          fallbackErrors.push(error);
         }
       }
     }
 
-    throw new Error(`AI Engine Exhausted all keys. Primary Error: ${primaryError?.message}. Secondary Error: ${secondaryError?.message}`);
+    const fallbackErrorMsg = fallbackErrors.map((e, idx) => `[FB${idx+1}] ${e?.message}`).join(', ');
+    throw new Error(`AI Engine Failure: Exhausted all keys. Primary Error: ${primaryError?.message}. Secondary Error: ${secondaryError?.message}. Fallback Errors: ${fallbackErrorMsg}`);
   }
 
   static async executeStreamWithFallback(messages: any[], endpoint?: string, userId?: string, token?: string) {
@@ -356,8 +368,8 @@ export class AiClient {
     let hasImage = false;
     let hasMultilingual = false;
 
-    const hindiRegex = /[\\u0900-\\u097F]/;
-    const bengaliRegex = /[\\u0980-\\u09FF]/;
+    const hindiRegex = /[\u0900-\u097F]/;
+    const bengaliRegex = /[\u0980-\u09FF]/;
 
     for (const msg of messages) {
       if (typeof msg.content === 'string') {
@@ -409,7 +421,7 @@ export class AiClient {
       }
 
       const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
-      const fallbackModel = fallbackProvider === 'groq' ? 'llama-3.1-8b-instant' : 'google/gemini-1.5-flash';
+      const fallbackModel = fallbackProvider === 'groq' ? 'qwen/qwen3.6-27b' : 'google/gemini-2.0-flash-001';
       logger.warn(`[AI Engine] Falling back stream to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'conversation'}...`);
       const fallbackClient = this.getClientForProvider(fallbackProvider);
 
@@ -470,7 +482,7 @@ export class AiClient {
             apiKey: fallbackKey,
             baseURL: config.secondaryAiBaseUrl,
           });
-          const groqModelToUseStream = "llama-3.1-8b-instant";
+          const groqModelToUseStream = "qwen/qwen3.6-27b";
           logger.info(`[AI Engine] Attempting stream with Fallback API ${i + 1} (${groqModelToUseStream})...`);
           const stream = await fallbackClient.chat.completions.create({
             model: modelToUse,

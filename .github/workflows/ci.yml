@@ -1,26 +1,67 @@
-name: CI
+name: CI & AI Evaluation
 
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '0 2 * * *' # Daily at 2am
+  workflow_dispatch:
 
 jobs:
-  test:
+  fast-tests:
+    name: Fast Tests
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Use Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '20.x'
+        cache: 'npm'
     - name: Install dependencies
       run: npm ci
-    - name: Run Jest Tests (Frontend & Backend)
-      run: npm run test
+    - name: Run Unit, Integration & Frontend Tests
+      # Excludes golden/adversarial and focuses on deterministic/mocked tests
+      run: node --experimental-vm-modules node_modules/jest/bin/jest.js tests/unit tests/integration tests/frontend
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps
-    - name: Run Playwright E2E Tests
+    - name: Run Playwright E2E (Critical Path Only)
+      run: npx playwright test tests/e2e/critical-journey.spec.ts
+
+  nightly-eval:
+    name: Nightly AI Evaluation
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    - name: Install dependencies
+      run: npm ci
+    - name: Run Golden & Adversarial Suites
+      # Let this fail if drift occurs so the repo owner is notified by GHA scheduled run failure alerts
+      run: node --experimental-vm-modules node_modules/jest/bin/jest.js tests/golden tests/adversarial --json --outputFile=ai-eval-results.json
+      env:
+        PRIMARY_AI_API_KEY: ${{ secrets.PRIMARY_AI_API_KEY }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    - name: Upload AI Evaluation Summary
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ai-eval-results
+        path: ai-eval-results.json
+    - name: Install Playwright Browsers
+      if: always()
+      run: npx playwright install --with-deps
+    - name: Run Full Playwright E2E Suite
+      if: always()
       run: npx playwright test

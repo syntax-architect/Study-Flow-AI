@@ -43,6 +43,8 @@ const adminAuth = (req: Request, res: Response, next: any) => {
   next();
 };
 import { adminLimiter } from '../middlewares/rateLimiter';
+import { requireAuth, requireTeacher } from '../middlewares/auth';
+import { runAllChecks } from '../diagnostics/checks';
 
 router.get('/system/health', adminAuth, (req: Request, res: Response) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
@@ -80,6 +82,19 @@ router.post('/ingest', adminLimiter, adminAuth, upload.single('file'), async (re
         }
       }
     }
+  }
+});
+
+router.get('/diagnose', requireAuth, requireTeacher, async (req: Request, res: Response) => {
+  try {
+    const results = await runAllChecks();
+    const passed = results.filter((r: any) => r.status === 'pass').length;
+    const warned = results.filter((r: any) => r.status === 'warn').length;
+    const failed = results.filter((r: any) => r.status === 'fail').length;
+    const summary = `${passed}/${results.length} PASSED, ${warned} WARNINGS, ${failed} FAILURES`;
+    res.json({ summary, results });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to run diagnostics', details: err.message });
   }
 });
 

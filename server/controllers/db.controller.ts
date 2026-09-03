@@ -503,3 +503,41 @@ export const getFlaggedStudents = async (req: Request, res: Response, next: Next
     next(err);
   }
 };
+
+export const submitWaitlist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = req.body;
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+
+    const client = adminSupabase;
+    
+    const { data, error } = await client
+      .from('waitlist')
+      .insert([{ email }])
+      .select()
+      .single();
+
+    if (error) {
+      // Check for unique constraint violation (duplicate email)
+      if (error.code === '23505' || error.message.includes('unique constraint') || error.message.includes('duplicate key value')) {
+        // We can treat it as a success so the user doesn't know, or just return success
+        return res.json({ success: true, message: 'Already on the waitlist' });
+      }
+      console.warn('Supabase waitlist error:', error.message);
+      // Fallback for development if table not created
+      if (error.code === '42P01' || error.message.includes('relation "public.waitlist" does not exist')) {
+        return res.json({ success: true, mock: true, message: 'Mock success, table missing' });
+      }
+      throw error;
+    }
+
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};

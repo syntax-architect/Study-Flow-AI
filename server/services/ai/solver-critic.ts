@@ -26,7 +26,7 @@ export class AiSolverCritic {
         const normalizedQuery = query.toLowerCase().trim();
         const casualGreetings = ['hello', 'hi', 'hey', 'yo', 'sup', 'what\'s up', 'whats up', 'how are you', 'good morning', 'good evening', 'good afternoon', 'write a python script', 'write a script'];
         
-        if (casualGreetings.some(g => normalizedQuery.includes(g)) || (normalizedQuery.length < 20 && !/\\d/.test(normalizedQuery))) {
+        if (casualGreetings.some(g => normalizedQuery.includes(g)) || (normalizedQuery.length < 20 && !/\d/.test(normalizedQuery))) {
           intent = 'CONVERSATION';
         } else {
           try {
@@ -223,7 +223,7 @@ export class AiSolverCritic {
           samplesDisagree = true;
         }
       } catch (e) {
-        const clean = (s: string) => s.replace(/\\s+/g, '').toLowerCase();
+        const clean = (s: string) => s.replace(/\s+/g, '').toLowerCase();
         samplesDisagree = !(clean(eq1) === clean(eq2) && clean(eq2) === clean(eq3));
       }
 
@@ -281,7 +281,11 @@ CRITICAL RULES FOR AUDIT:
       return { error: "Unknown tool" };
     };
 
-    const criticData = await AiClient.executeWithFallback(criticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, undefined, criticTools, criticToolHandler);
+    const criticData = await AiClient.executeWithFallback(criticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, (token) => {
+      if (onEvent) {
+        onEvent({ type: 'critic_chunk', data: { content: token } });
+      }
+    }, criticTools, criticToolHandler);
 
     const stepVerdictsMap = new Map();
     if (criticData.stepVerdicts && Array.isArray(criticData.stepVerdicts)) {
@@ -343,7 +347,11 @@ CRITICAL RULES FOR AUDIT:
 - Mark unverified steps clearly with verified = false and provide criticFeedback.` }
       ];
 
-      const reCriticData = await AiClient.executeWithFallback(reCriticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, undefined, criticTools, criticToolHandler);
+      const reCriticData = await AiClient.executeWithFallback(reCriticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, (token) => {
+        if (onEvent) {
+          onEvent({ type: 'critic_chunk', data: { content: token, isCorrection: true } });
+        }
+      }, criticTools, criticToolHandler);
       
       finalSolverData = correctedSolverData;
       finalCriticData = reCriticData;
@@ -431,23 +439,23 @@ CRITICAL RULES FOR AUDIT:
     appCache.set(cacheKey, finalResponse, 3600 * 24);
     
     if (queryEmbedding) {
-      let semanticCount = 0; // FIX: Bug 3
-      let oldestKey = ''; // FIX: Bug 3
-      let oldestTime = Infinity; // FIX: Bug 3
-      for (const [key] of appCache.entries()) { // FIX: Bug 3
-        if (key.startsWith('semanticCache_')) { // FIX: Bug 3
-          semanticCount++; // FIX: Bug 3
-          const parts = key.split('_'); // FIX: Bug 3
-          const time = parseInt(parts[1] || '0', 10); // FIX: Bug 3
-          if (time < oldestTime) { // FIX: Bug 3
-            oldestTime = time; // FIX: Bug 3
-            oldestKey = key; // FIX: Bug 3
-          } // FIX: Bug 3
-        } // FIX: Bug 3
-      } // FIX: Bug 3
-      if (semanticCount >= 500 && oldestKey) { // FIX: Bug 3
-        appCache.delete(oldestKey); // FIX: Bug 3
-      } // FIX: Bug 3
+      let semanticCount = 0;
+      let oldestKey = '';
+      let oldestTime = Infinity;
+      for (const [key] of appCache.entries()) {
+        if (key.startsWith('semanticCache_')) {
+          semanticCount++;
+          const parts = key.split('_');
+          const time = parseInt(parts[1] || '0', 10);
+          if (time < oldestTime) {
+            oldestTime = time;
+            oldestKey = key;
+          }
+        }
+      }
+      if (semanticCount >= 500 && oldestKey) {
+        appCache.delete(oldestKey);
+      }
 
       const semanticKey = `semanticCache_${Date.now()}_${Math.random().toString(36).substring(7)}`;
       appCache.set(semanticKey, {

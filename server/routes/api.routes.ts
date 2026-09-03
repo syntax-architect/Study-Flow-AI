@@ -11,8 +11,9 @@ import { requireAuth } from '../middlewares/auth';
 const router = Router();
 
 router.get('/health', getHealth);
-import { getPublicTrustStats } from '../controllers/db.controller';
+import { getPublicTrustStats, submitWaitlist } from '../controllers/db.controller';
 router.get('/trust-stats', getPublicTrustStats);
+router.post('/waitlist', submitWaitlist);
 
 router.post('/solver-critic', requireAuth, solverCriticRateLimiter, handleSolverCritic);
 router.post('/audit-topic', requireAuth, solverCriticRateLimiter, handleAuditTopic);

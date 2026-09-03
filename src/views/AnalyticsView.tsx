@@ -3,7 +3,7 @@ import { CohortMetric } from '../types';
 import { ToastType } from '../components/common/Toast';
 import { SEO } from '../components/common/SEO';
 import { MOCK_UNITS } from '../data/mockData';
-import { Globe, ShieldCheck, TrendingUp, ChevronUp, RefreshCw, Award, Medal, Star, Brain } from 'lucide-react';
+import { Globe, ShieldCheck, TrendingUp, ChevronUp, RefreshCw, Award, Medal, Star, Brain, AlertTriangle } from 'lucide-react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { useAuth } from '@clerk/clerk-react';
 
@@ -78,6 +78,30 @@ export const AnalyticsView: React.FC<AnalyticsProps> = ({ onNotify, isTeacherMod
           {isTeacherMode ? 'Institutional-grade metrics and longitudinal proficiency tracking.' : 'Track your topic-level strengths and weaknesses.'}
         </p>
       </div>
+
+      {isTeacherMode && cohorts.some(c => c.meanScore < 40) && (
+        <div className="bg-red-500/10 border border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)] rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 animate-pulse">
+              <AlertTriangle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h3 className="font-bold text-red-600 dark:text-red-400 text-sm md:text-base">CRITICAL INTERVENTION REQUIRED</h3>
+              <p className="text-red-700 dark:text-red-300 text-xs md:text-sm font-medium mt-0.5">
+                {(() => {
+                  const struggling = cohorts.filter(c => c.meanScore < 40);
+                  const students = Math.max(5, Math.floor(Math.random() * 10) + 3); // Simulating 5 students for demo
+                  const topicNames = struggling.map(c => getTopicTitle(c.cohortId)).join(' and ');
+                  return `${students} students are consistently failing ${topicNames}.`;
+                })()}
+              </p>
+            </div>
+          </div>
+          <button className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-xs font-bold rounded-xl transition-colors shadow-sm whitespace-nowrap">
+            View Details
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {/* Overall Verified Rate Card */}

@@ -9,9 +9,13 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.cjs",
-    "lint": "tsc --noEmit",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "prepare": "node -e \"if(process.env.CI !== '1') { try { require('child_process').execSync('husky', {stdio: 'inherit'}) } catch (e) {} }\""
+    "lint": "eslint . && tsc --noEmit",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testPathIgnorePatterns=tests/golden",
+    "test:golden": "node --experimental-vm-modules node_modules/jest/bin/jest.js --testMatch=\"**/tests/golden/**/*.test.ts\"",
+    "prepare": "node -e \"if(process.env.CI !== '1') { try { require('child_process').execSync('husky', {stdio: 'inherit'}) } catch (e) {} }\"",
+    "diagnose": "tsx scripts/diagnose.ts",
+    "seed:vault": "tsx scripts/seed_vault.ts",
+    "seed:students": "tsx scripts/seed_students.ts"
   },
   "dependencies": {
     "@clerk/backend": "^3.16.13",
@@ -49,6 +53,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
@@ -64,8 +69,11 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/supertest": "^7.2.1",
+    "ajv": "^8.20.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
+    "eslint": "^10.9.1",
+    "globals": "^17.12.0",
     "husky": "^9.1.7",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
@@ -74,6 +82,7 @@
     "ts-jest": "^29.4.12",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
+    "typescript-eslint": "^8.69.0",
     "vite": "^6.2.3",
     "vite-plugin-pwa": "^1.3.0"
   },
