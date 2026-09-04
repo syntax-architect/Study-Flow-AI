@@ -3,6 +3,9 @@
  */
 import { config } from '../../server/config/env';
 import { AiClient } from '../../server/services/ai/client';
+import OpenAI from 'openai';
+
+jest.mock('openai');
 
 describe('Fallback Chain End-to-End', () => {
   let originalPrimary: string | undefined;
@@ -13,6 +16,30 @@ describe('Fallback Chain End-to-End', () => {
     originalPrimary = config.primaryAiApiKey;
     originalSecondary = config.secondaryAiApiKey;
     originalFallback = [...(config.fallbackApiKeys || [])];
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    // Setup default mock behavior
+    (OpenAI as unknown as jest.Mock).mockImplementation((opts: any) => {
+      return {
+        chat: {
+          completions: {
+            create: jest.fn().mockImplementation(async () => {
+              if (opts.apiKey?.includes('invalid')) {
+                const error = new Error('Invalid API Key');
+                (error as any).status = 401;
+                throw error;
+              }
+              return {
+                choices: [{ message: { content: '{"result": "success"}' } }]
+              };
+            })
+          }
+        }
+      };
+    });
   });
 
   afterEach(() => {
