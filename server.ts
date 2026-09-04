@@ -8,9 +8,13 @@ import { config } from './server/config/env';
 import apiRoutes from './server/routes/api.routes';
 import { errorHandler } from './server/middlewares/errorHandler';
 import { globalLimiter } from './server/middlewares/rateLimiter';
+import compression from 'compression';
 
 async function startServer() {
   const app = express();
+  
+  // Compress all responses
+  app.use(compression());
   
   // Trust proxy if behind a load balancer (e.g., Vercel, Nginx)
   app.set('trust proxy', 1);

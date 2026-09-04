@@ -12,7 +12,7 @@ const AnalyticsView = lazy(() => import('./views/AnalyticsView').then(module => 
 const VaultView = lazy(() => import('./views/VaultView').then(module => ({ default: module.VaultView })));
 const MentorReviewView = lazy(() => import('./views/MentorReviewView').then(module => ({ default: module.MentorReviewView })));
 const StudyRoomView = lazy(() => import('./views/StudyRoomView').then(module => ({ default: module.StudyRoomView })));
-import { LoginView } from './views/LoginView';
+const LoginView = lazy(() => import('./views/LoginView').then(m => ({ default: m.LoginView })));
 const TrustDashboardView = lazy(() => import('./views/TrustDashboardView').then(m => ({ default: m.TrustDashboardView })));
 const InterventionView = lazy(() => import('./views/InterventionView').then(m => ({ default: m.InterventionView })));
 import { SettingsModal } from './components/settings/SettingsModal';
@@ -24,8 +24,8 @@ import { BackToTop } from './components/common/BackToTop';
 import { ShortcutsModal } from './components/common/ShortcutsModal';
 
 import { AppLoader } from './components/layout/AppLoader';
-import { WaitlistView } from './views/WaitlistView';
-import { NotFoundView } from './views/NotFoundView';
+const WaitlistView = lazy(() => import('./views/WaitlistView').then(m => ({ default: m.WaitlistView })));
+const NotFoundView = lazy(() => import('./views/NotFoundView').then(m => ({ default: m.NotFoundView })));
 
 export default function App() {
   const { signOut } = useClerk();
@@ -135,7 +135,11 @@ export default function App() {
       <ShortcutsModal />
 
       <Routes>
-        <Route path="/waitlist" element={<WaitlistView />} />
+        <Route path="/waitlist" element={
+          <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-t-[#2563EB] border-black/10 dark:border-white/10 animate-spin" /></div>}>
+            <WaitlistView />
+          </Suspense>
+        } />
         <Route path="/trust" element={
           <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-t-[#2563EB] border-black/10 dark:border-white/10 animate-spin" /></div>}>
             <TrustDashboardView />
@@ -230,11 +234,13 @@ export default function App() {
                 </div>
               </SignedIn>
               <SignedOut>
-                <LoginView 
-                  soundEnabled={soundEnabled} 
-                  isDarkMode={isDarkMode} 
-                  onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
-                />
+                <Suspense fallback={<div className="flex h-full w-full items-center justify-center"><div className="w-8 h-8 rounded-full border-4 border-t-[#2563EB] border-black/10 dark:border-white/10 animate-spin" /></div>}>
+                  <LoginView 
+                    soundEnabled={soundEnabled} 
+                    isDarkMode={isDarkMode} 
+                    onToggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
+                  />
+                </Suspense>
               </SignedOut>
             </>
           } />

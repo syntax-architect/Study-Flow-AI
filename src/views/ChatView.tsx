@@ -23,7 +23,7 @@ export interface ChatViewProps {
   onNotify: (msg: string, type: ToastType) => void;
 }
 
-export const ChatView: React.FC<ChatViewProps> = ({
+export const ChatView: React.FC<ChatViewProps> = React.memo(({
   messages,
   setMessages,
   initialQuery = '',
@@ -794,4 +794,4 @@ export const ChatView: React.FC<ChatViewProps> = ({
     </div>
     </div>
   );
-};
+});

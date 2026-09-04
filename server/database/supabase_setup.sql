@@ -337,7 +337,9 @@ CREATE POLICY "Service role can insert usage"
 -- Performance Indices
 -- ==========================================
 CREATE INDEX IF NOT EXISTS idx_chats_user_id ON public.chats(user_id);
+CREATE INDEX IF NOT EXISTS idx_chats_created_at ON public.chats(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON public.messages(chat_id);
+CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_review_queue_user_id ON public.review_queue(user_id);
 CREATE INDEX IF NOT EXISTS idx_review_queue_status ON public.review_queue(status);
 CREATE INDEX IF NOT EXISTS idx_documents_embedding_hnsw ON public.documents USING hnsw (embedding vector_cosine_ops);

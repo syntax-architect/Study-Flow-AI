@@ -40,24 +40,33 @@ export class AiService {
       const earlierHistoryText = earlierMessages.map((m: any) => `${m.role}: ${m.content}`).join('\n');
       const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
       
-      try {
-        const client = config.useNewAiArchitecture ? AiClient.getClientForProvider(config.routerProvider) : AiClient.getPrimaryClient();
-        const routerModel = config.useNewAiArchitecture ? config.routerModel : config.primaryAiModel;
-        const summaryRes = await client.chat.completions.create({
-          model: routerModel,
-          messages: [{ role: 'user', content: summaryPrompt }],
-          max_tokens: 150,
-          temperature: 0.1
-        });
-        const summary = summaryRes.choices[0]?.message?.content || '';
-        if (summary) {
-          processedMessages = [
-            { role: 'system', content: `Previous Context Summary: ${summary}` },
-            ...lastSixMessages
-          ];
+      const cacheKey = `chat_summary_${Buffer.from(earlierHistoryText).toString('base64').substring(0, 50)}`;
+      let summary = appCache.get<string>(cacheKey) || '';
+
+      if (!summary) {
+        try {
+          const client = config.useNewAiArchitecture ? AiClient.getClientForProvider(config.routerProvider) : AiClient.getPrimaryClient();
+          const routerModel = config.useNewAiArchitecture ? config.routerModel : config.primaryAiModel;
+          const summaryRes = await client.chat.completions.create({
+            model: routerModel,
+            messages: [{ role: 'user', content: summaryPrompt }],
+            max_tokens: 150,
+            temperature: 0.1
+          });
+          summary = summaryRes.choices[0]?.message?.content || '';
+          if (summary) {
+            appCache.set(cacheKey, summary, 3600); // cache for 1 hour
+          }
+        } catch (err) {
+          logger.warn('[AI Engine] Summarization failed, falling back to full history:', err);
         }
-      } catch (err) {
-        logger.warn('[AI Engine] Summarization failed, falling back to full history:', err);
+      }
+
+      if (summary) {
+        processedMessages = [
+          { role: 'system', content: `Previous Context Summary: ${summary}` },
+          ...lastSixMessages
+        ];
       }
     }
 
