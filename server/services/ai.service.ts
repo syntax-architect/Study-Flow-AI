@@ -138,15 +138,25 @@ History:
 ${recentHistory}`;
 
     try {
-      const primaryClient = AiClient.getPrimaryClient();
-      const res = await primaryClient.chat.completions.create({
-        model: config.primaryAiModel,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 50,
-        temperature: 0.1
-      });
+      const memorySchema = {
+        type: "object",
+        properties: {
+          insight: { type: "string" }
+        },
+        required: ["insight"],
+        additionalProperties: false
+      };
+
+      const res = await AiClient.executeWithFallback(
+        [{ role: 'user', content: prompt }],
+        memorySchema,
+        'memory_extraction',
+        userId,
+        'router', // Uses the fast router model
+        0.1
+      );
       
-      const insight = res.choices[0]?.message?.content?.trim();
+      const insight = res.insight?.trim();
       
       if (insight && insight !== "NO_INSIGHT" && insight.length > 10) {
         logger.info(`[AI Engine] Background extracted new memory for user ${userId}: ${insight}`);

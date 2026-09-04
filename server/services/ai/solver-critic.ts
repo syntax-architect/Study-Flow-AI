@@ -254,16 +254,21 @@ export class AiSolverCritic {
         logger.warn(`[AI Engine] Solvers disagreed! Spawning Debate Synthesizer Agent to resolve conflict.`);
         try {
           const debateMessages = [
-            { role: 'system', content: `You are the Debate Synthesizer Agent. Three different AI solvers attempted this problem and got conflicting final equations. Analyze their step-by-step logic, identify who made the mathematical or conceptual error, and output the ultimate, correct final solution using this JSON schema. Do not output anything outside of the JSON.` },
+            { role: 'system', content: `You are the Debate Synthesizer Agent. Three different AI solvers attempted this problem and got conflicting final equations. Analyze their step-by-step logic, identify who made the mathematical or conceptual error, and output the ultimate, correct final solution.` },
             { role: 'user', content: `Question: ${query}\n\nSolver 1 (T=0.3):\n${JSON.stringify(solverResults[0])}\n\nSolver 2 (T=0.5):\n${JSON.stringify(solverResults[1])}\n\nSolver 3 (T=0.7):\n${JSON.stringify(solverResults[2])}` }
           ];
-          const primaryClient = AiClient.getPrimaryClient();
-          const debateRes = await primaryClient.chat.completions.create({
-            model: config.primaryAiModel,
-            messages: debateMessages as any,
-            response_format: { type: 'json_object' }
-          });
-          const debateData = JSON.parse(debateRes.choices[0]?.message?.content || '{}');
+          
+          const debateData = await AiClient.executeWithFallback(
+            debateMessages,
+            solverSchema,
+            'solver_response',
+            userId,
+            'solver',
+            0.1,
+            undefined,
+            solverTools,
+            solverToolHandler
+          );
           
           if (debateData.steps && debateData.finalEquation) {
              logger.info(`[AI Engine] Debate Agent successfully synthesized a consensus derivation.`);

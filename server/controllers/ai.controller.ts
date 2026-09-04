@@ -25,6 +25,16 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
     const token = req.headers.authorization?.split(' ')[1];
     const isStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
 
+    if (chatId && query) {
+      logger.debug(`[AI Controller] Saving user message immediately to chat ${chatId}`);
+      const { error: insertErr } = await getClient(req).from('messages').insert([{
+        chat_id: chatId,
+        role: 'user',
+        content: query
+      }]);
+      if (insertErr) logger.error('[AI Controller] Error saving user message:', insertErr);
+    }
+
     // Prevent LLM from imitating our internal JSON response structure
     const sanitizedMessages = messages.map((m: any) => {
       if (!m) return m;
@@ -78,21 +88,6 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         timestamp: new Date().toISOString(),
       };
 
-      // Save user message to DB
-      if (chatId && finalResponse) {
-        logger.debug(`[AI Controller] Saving user message to chat ${chatId}`);
-        const { error: userErr } = await getClient(req).from('messages').insert([{
-          chat_id: chatId,
-          role: 'user',
-          content: query
-        }]);
-        if (userErr) {
-          logger.error("[AI Controller] Error saving user message:", userErr);
-        } else {
-          logger.debug("[AI Controller] User message saved successfully.");
-        }
-      }
-
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
         logger.debug(`[AI Controller] Saving assistant message to chat ${chatId}`);
@@ -134,21 +129,6 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         ...resultData,
         timestamp: new Date().toISOString(),
       };
-
-      // Save user message to DB
-      if (chatId && finalResponse) {
-        logger.debug(`[AI Controller] Saving user message to chat ${chatId} (non-stream)`);
-        const { error: userErr } = await getClient(req).from('messages').insert([{
-          chat_id: chatId,
-          role: 'user',
-          content: query
-        }]);
-        if (userErr) {
-          logger.error("[AI Controller] Error saving user message:", userErr);
-        } else {
-          logger.debug("[AI Controller] User message saved successfully.");
-        }
-      }
 
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
@@ -230,6 +210,16 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
       }
     }
 
+    if (chatId && originalUserContent) {
+      logger.debug(`[AI Controller] Saving user message immediately to chat ${chatId}`);
+      const { error: insertErr } = await getClient(req).from('messages').insert([{
+        chat_id: chatId,
+        role: 'user',
+        content: originalUserContent
+      }]);
+      if (insertErr) logger.error('[AI Controller] Error saving user message:', insertErr);
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -259,15 +249,6 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
 
     // Save messages to DB now that AI generated a response
     if (chatId) {
-      if (originalUserContent) {
-        const { error: userErr } = await getClient(req).from('messages').insert([{
-          chat_id: chatId,
-          role: 'user',
-          content: originalUserContent
-        }]);
-        if (userErr) logger.error("Error saving user message:", userErr);
-      }
-
       if (fullAssistantContent) {
         const { error: astErr } = await getClient(req).from('messages').insert([{
           chat_id: chatId,

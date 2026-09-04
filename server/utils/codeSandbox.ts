@@ -1,5 +1,6 @@
 import vm from 'vm';
 import { logger } from './logger';
+import * as mathjs from 'mathjs';
 
 export function executeJavascript(code: string): string {
   try {
@@ -11,6 +12,7 @@ export function executeJavascript(code: string): string {
       },
       output: '',
       Math: Math,
+      math: mathjs,
     };
 
     const context = vm.createContext(sandbox);

@@ -1,6 +1,7 @@
 import { supabase, getAuthSupabase } from '../../lib/supabase';
 import { getExtractor } from '../../utils/pipeline';
 import { logger } from '../../utils/logger';
+import { appCache } from '../../utils/cache';
 import { AiClient } from './client';
 import { getExpansionSchema, getRerankSchema } from './schemas';
 
@@ -167,13 +168,22 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
   static async fetchUserMasteryContext(userId?: string): Promise<string> {
     if (!userId) return '';
     
+    const cacheKey = `userMastery_${userId}`;
+    const cached = appCache.get<string>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+    
     try {
       const { data, error } = await supabase
         .from('user_topic_mastery')
         .select('*')
         .eq('user_id', userId);
         
-      if (error || !data || data.length === 0) return '';
+      if (error || !data || data.length === 0) {
+        appCache.set(cacheKey, '', 900); // 15 mins
+        return '';
+      }
 
       const struggledTopics = data.filter(t => {
         const total = t.verified_count + t.flagged_count;
@@ -182,13 +192,18 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         return score <= 0.6 || t.flagged_count > 1; // Struggling threshold
       });
 
-      if (struggledTopics.length === 0) return '';
+      if (struggledTopics.length === 0) {
+        appCache.set(cacheKey, '', 900);
+        return '';
+      }
 
       const topicSummaries = struggledTopics.map(t => 
         `- ${t.topic_title} (${t.verified_count}/${t.verified_count + t.flagged_count} verified)`
       ).join('\n');
 
-      return `\n\n=== STUDENT ADAPTIVITY PROFILE ===\nThis student has previously struggled with the following topics:\n${topicSummaries}\n\nIf the current question relates to any of these topics, you MUST explain foundational steps extremely explicitly rather than assuming mastery. Do not skip any mathematical or conceptual steps for these areas.`;
+      const result = `\n\n=== STUDENT ADAPTIVITY PROFILE ===\nThis student has previously struggled with the following topics:\n${topicSummaries}\n\nIf the current question relates to any of these topics, you MUST explain foundational steps extremely explicitly rather than assuming mastery. Do not skip any mathematical or conceptual steps for these areas.`;
+      appCache.set(cacheKey, result, 900);
+      return result;
     } catch (err) {
       logger.warn('[AI Engine] Failed to fetch user mastery:', err);
       return '';
@@ -197,6 +212,14 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
 
   static async retrieveUserMemory(userId: string, query: string, token?: string) {
     if (!userId) return '';
+    
+    const queryHash = Buffer.from(query).toString('base64').substring(0, 30);
+    const cacheKey = `userMemory_${userId}_${queryHash}`;
+    const cached = appCache.get<string>(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+    
     try {
       const extractor = await getExtractor();
       const output = await extractor(query, { pooling: 'mean', normalize: true });
@@ -211,10 +234,15 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
       });
 
       if (error) throw error;
-      if (!data || data.length === 0) return '';
+      if (!data || data.length === 0) {
+        appCache.set(cacheKey, '', 3600); // cache misses for 1 hour
+        return '';
+      }
       
       const memories = data.map((d: any) => `- ${d.content}`).join('\n');
-      return `\n[LONG-TERM MEMORY RECALL]\nThe following are insights about the student's learning history (weaknesses, masteries, habits):\n${memories}\n\nUse this context to heavily personalize your Socratic approach. Focus on addressing their known weaknesses.\n`;
+      const result = `\n[LONG-TERM MEMORY RECALL]\nThe following are insights about the student's learning history (weaknesses, masteries, habits):\n${memories}\n\nUse this context to heavily personalize your Socratic approach. Focus on addressing their known weaknesses.\n`;
+      appCache.set(cacheKey, result, 3600);
+      return result;
     } catch (err) {
       logger.error('Failed to retrieve user memory:', err);
       return '';
