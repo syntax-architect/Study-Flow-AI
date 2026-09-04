@@ -1,6 +1,6 @@
 import React from 'react';
 import { m } from 'motion/react';
-import { Plus, RefreshCw, AudioLines, Mic, MicOff, Square, Send } from 'lucide-react';
+import { Plus, RefreshCw, AudioLines, Mic, MicOff, Square, Send, X } from 'lucide-react';
 
 interface ChatInputBarProps {
   subject: string;
@@ -17,6 +17,9 @@ interface ChatInputBarProps {
   onSubmit: (e: React.FormEvent) => void;
   onStop: () => void;
   onImageClick: () => void;
+  onFileUpload?: (file: File) => void;
+  onClearImage?: () => void;
+  selectedImage?: string | null;
   onToggleListening: () => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
 }
@@ -36,9 +39,47 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   onSubmit,
   onStop,
   onImageClick,
+  onFileUpload,
+  onClearImage,
+  selectedImage,
   onToggleListening,
   inputRef,
 }) => {
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (e.clipboardData && e.clipboardData.items) {
+      const items = e.clipboardData.items;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file && onFileUpload) {
+            e.preventDefault();
+            onFileUpload(file);
+            break;
+          }
+        }
+      }
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files) {
+      const files = e.dataTransfer.files;
+      for (let i = 0; i < files.length; i++) {
+        if (files[i].type.indexOf('image') !== -1) {
+          const file = files[i];
+          if (file && onFileUpload) {
+            onFileUpload(file);
+            break;
+          }
+        }
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+  };
   return (
     <div className="px-4 md:px-8 pt-3 pb-6 md:pb-8 w-full max-w-3xl mx-auto flex flex-col items-center">
       <div className="w-full bg-zinc-100 dark:bg-[#1E1F20] rounded-[32px] p-2 pr-4 shadow-sm relative transition-all focus-within:ring-2 focus-within:ring-white/10 flex flex-col">
@@ -77,6 +118,22 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           </div>
         </div>
 
+        {selectedImage && (
+          <div className="px-4 pt-2 pb-1 relative inline-block">
+            <div className="relative inline-block border border-black/10 dark:border-white/10 rounded-xl overflow-hidden shadow-sm">
+              <img src={selectedImage} alt="Uploaded" className="h-16 w-auto object-cover max-w-[200px]" />
+              <button
+                type="button"
+                onClick={onClearImage}
+                className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-0.5 transition-colors flex items-center justify-center"
+                title="Remove image"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="flex items-center gap-2 w-full">
           <button
             type="button"
@@ -108,6 +165,9 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 }
               }
             }}
+            onPaste={handlePaste}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
             placeholder="Message Assistant..."
             className="flex-1 bg-transparent px-2 py-3.5 text-base text-zinc-900 dark:text-zinc-100 focus:outline-none placeholder:text-zinc-500 resize-none overflow-y-auto scrollbar-none"
             style={{ minHeight: '52px', maxHeight: '150px' }}

@@ -103,6 +103,25 @@ export const getCriticTools = (evaluateExpression: any) => [
   }
 ];
 
+export const getSolverTools = () => [
+  {
+    type: "function",
+    function: {
+      name: "execute_javascript",
+      description: "Execute a block of javascript code in a secure sandbox to calculate physics/math simulations or solve equations. Return the result via console.log. Example code: `console.log(15 * 42)`",
+      parameters: {
+        type: "object",
+        properties: {
+          code: { type: "string" }
+        },
+        required: ["code"],
+        additionalProperties: false
+      },
+      strict: true
+    }
+  }
+];
+
 export const getExpansionSchema = () => ({
   type: "object",
   properties: {

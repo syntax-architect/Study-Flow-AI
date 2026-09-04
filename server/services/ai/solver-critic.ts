@@ -3,13 +3,14 @@ import { config } from '../../config/env';
 import { appCache } from '../../utils/cache';
 import { logger } from '../../utils/logger';
 import { evaluateExpression } from '../../utils/mathSandbox';
+import { executeJavascript } from '../../utils/codeSandbox';
 import { getExtractor } from '../../utils/pipeline';
 import { AiClient, MASTER_SYSTEM_PROMPT } from './client';
 import { AiContext } from './context';
-import { getSolverSchema, getCriticSchema, getCriticTools } from './schemas';
+import { getSolverSchema, getCriticSchema, getCriticTools, getSolverTools } from './schemas';
 
 export class AiSolverCritic {
-  static async generateSolverCritic(query: string, subject: string, language: string = 'en', messages: any[] = [], onEvent?: (event: any) => void, userId?: string, token?: string) {
+  static async generateSolverCritic(query: string, subject: string, language: string = 'en', messages: any[] = [], onEvent?: (event: any) => void, userId?: string, token?: string, imageUrl?: string) {
     const languageMap: Record<string, string> = {
       'en': 'English',
       'bn': 'Bengali (Use ONLY proper Bengali script / বাংলা লিপি for ALL text. NEVER use English/Latin letters for Bengali words. No Romanized Bengali.)',
@@ -19,7 +20,9 @@ export class AiSolverCritic {
 
     let intent = 'HARD_ACADEMIC';
     try {
-      if (query.length < 1000) {
+      if (imageUrl) {
+        intent = 'HARD_ACADEMIC';
+      } else if ((query || '').length < 1000) {
         const primaryClient = AiClient.getPrimaryClient();
         const shortHistory = messages.slice(-4).map(m => ({ role: m.role, content: m.content }));
         
@@ -144,9 +147,27 @@ export class AiSolverCritic {
     }
 
     solverMessages.push(...recentHistory);
-    solverMessages.push({ role: 'user', content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"` });
+    if (imageUrl) {
+      solverMessages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query || 'Solve the problem in the image.'}"` },
+          { type: 'image_url', image_url: { url: imageUrl } }
+        ]
+      });
+    } else {
+      solverMessages.push({ role: 'user', content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"` });
+    }
     
     const solverSchema = getSolverSchema();
+    const solverTools = getSolverTools();
+    const solverToolHandler = async (name: string, args: any) => {
+      if (name === "execute_javascript") {
+        logger.info(`[AI Engine] Solver executing JS: ${args.code}`);
+        return { result: executeJavascript(args.code) };
+      }
+      return { error: "Unknown tool" };
+    };
 
     const historyString = JSON.stringify(recentHistory);
     const cacheKey = `solverCritic_${Buffer.from(query + subject + language + historyString).toString('base64')}`;
@@ -190,19 +211,19 @@ export class AiSolverCritic {
         if (onEvent) {
           onEvent({ type: 'solver_chunk', data: { content: token } });
         }
-      })
+      }, solverTools, solverToolHandler)
     ];
     
     if (intent === 'HARD_ACADEMIC') {
       solverPromises.push(
-        AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.5),
-        AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.7)
+        AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.5, undefined, solverTools, solverToolHandler),
+        AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.7, undefined, solverTools, solverToolHandler)
       );
     }
 
     const solverResults = await Promise.all(solverPromises);
     const solverDataPrimary = solverResults[0];
-    const solverData = solverDataPrimary;
+    let solverData = solverDataPrimary;
     
     let samplesDisagree = false;
     
@@ -228,6 +249,33 @@ export class AiSolverCritic {
       }
 
       logger.info(`[AI Engine] Primary derivation (T=0.3) shown to student. Consensus check: ${samplesDisagree ? 'DISAGREED' : 'AGREED'}. Eq1: ${eq1}, Eq2: ${eq2}, Eq3: ${eq3}`);
+      
+      if (samplesDisagree) {
+        logger.warn(`[AI Engine] Solvers disagreed! Spawning Debate Synthesizer Agent to resolve conflict.`);
+        try {
+          const debateMessages = [
+            { role: 'system', content: `You are the Debate Synthesizer Agent. Three different AI solvers attempted this problem and got conflicting final equations. Analyze their step-by-step logic, identify who made the mathematical or conceptual error, and output the ultimate, correct final solution using this JSON schema. Do not output anything outside of the JSON.` },
+            { role: 'user', content: `Question: ${query}\n\nSolver 1 (T=0.3):\n${JSON.stringify(solverResults[0])}\n\nSolver 2 (T=0.5):\n${JSON.stringify(solverResults[1])}\n\nSolver 3 (T=0.7):\n${JSON.stringify(solverResults[2])}` }
+          ];
+          const primaryClient = AiClient.getPrimaryClient();
+          const debateRes = await primaryClient.chat.completions.create({
+            model: config.primaryAiModel,
+            messages: debateMessages as any,
+            response_format: { type: 'json_object' }
+          });
+          const debateData = JSON.parse(debateRes.choices[0]?.message?.content || '{}');
+          
+          if (debateData.steps && debateData.finalEquation) {
+             logger.info(`[AI Engine] Debate Agent successfully synthesized a consensus derivation.`);
+             solverData = { ...solverData, ...debateData };
+             solverData.pipelineLog = solverData.pipelineLog || {};
+             solverData.pipelineLog.debateAgentResolved = true;
+          }
+        } catch (e) {
+          logger.error(`[AI Engine] Debate Agent failed to synthesize. Falling back to primary solver output.`, e);
+        }
+      }
+
     } else {
       logger.info(`[AI Engine] EASY_ACADEMIC intent detected. Skipped 3-solver consensus to save latency.`);
     }
@@ -244,17 +292,14 @@ export class AiSolverCritic {
       }
     }
 
-    const criticMessages = [
-      { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.` },
-      { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================` },
-      ...recentHistory,
-      { role: 'user', content: `Fact-check the following Solver AI's derivation line-by-line against standard academic curriculum and the ground truth.
+    const criticPromptText = `Fact-check the following Solver AI's derivation line-by-line against standard academic curriculum and the ground truth.
 
-Question: "${query}"
+Question: "${query || 'Solve the problem in the image.'}"
 
 Solver Derivation:
 ${JSON.stringify(solverData.steps, null, 2)}
-${samplesDisagree ? "\nWARNING: Multiple independent solver runs produced conflicting final equations. Audit this derivation with EXTREME skepticism. The confidence score should likely be lowered." : ""}
+${samplesDisagree && !solverData.pipelineLog?.debateAgentResolved ? "\nWARNING: Multiple independent solver runs produced conflicting final equations, and the Debate Agent failed. Audit this derivation with EXTREME skepticism. The confidence score should likely be lowered." : ""}
+${samplesDisagree && solverData.pipelineLog?.debateAgentResolved ? "\nNOTE: Solvers initially disagreed, but a Debate Synthesizer resolved the logic. Audit the synthesized steps carefully." : ""}
 
 CRITICAL RULES FOR AUDIT:
 1. Dimensional Analysis: Explicitly check units/dimensions of the final equation.
@@ -263,8 +308,26 @@ CRITICAL RULES FOR AUDIT:
 - If the question is within academic scope and conceptually correct, set criticAuditStatus = "VERIFIED" and isOutOfScope = false.
 - If it contains a trick assumption, asks for out-of-scope concepts, or fails the traps above, set criticAuditStatus = "FLAGGED", isOutOfScope = true, and provide criticAuditNotes.
 - Provide a confidenceScore (0-100).
-- Mark unverified steps clearly with verified = false and provide criticFeedback.` }
+- Mark unverified steps clearly with verified = false and provide criticFeedback.`;
+
+    const criticMessages: any[] = [
+      { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.` },
+      { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================` },
+      ...recentHistory,
     ];
+
+    if (imageUrl) {
+      criticMessages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: criticPromptText },
+          { type: 'image_url', image_url: { url: imageUrl } }
+        ]
+      });
+    } else {
+      criticMessages.push({ role: 'user', content: criticPromptText });
+    }
+
     
     const criticSchema = getCriticSchema();
     const criticTools = getCriticTools(evaluateExpression);
@@ -309,12 +372,25 @@ CRITICAL RULES FOR AUDIT:
 
     if (finalStatus === 'FLAGGED') {
       logger.info(`[AI Engine] Critic flagged the response. Initiating Self-Correction Loop...`);
-      const correctionMessages = [
+      const correctionUserText = `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query || 'Solve the problem in the image.'}"\n\n=== CRITIC FEEDBACK FROM PREVIOUS ATTEMPT ===\nThe Critic AI rejected your previous derivation for the following reasons:\n${criticData.criticAuditNotes}\nStep-specific feedback:\n${JSON.stringify(criticData.stepVerdicts?.filter((v: any) => !v.verified) || [], null, 2)}\n\nCRITICAL INSTRUCTION: You must rewrite your derivation to address ALL of the Critic's feedback. Do not repeat the same mistakes.`;
+      
+      const correctionMessages: any[] = [
         { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}` },
         { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.` },
-        ...recentHistory,
-        { role: 'user', content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"\n\n=== CRITIC FEEDBACK FROM PREVIOUS ATTEMPT ===\nThe Critic AI rejected your previous derivation for the following reasons:\n${criticData.criticAuditNotes}\nStep-specific feedback:\n${JSON.stringify(criticData.stepVerdicts?.filter((v: any) => !v.verified) || [], null, 2)}\n\nCRITICAL INSTRUCTION: You must rewrite your derivation to address ALL of the Critic's feedback. Do not repeat the same mistakes.` }
+        ...recentHistory
       ];
+
+      if (imageUrl) {
+        correctionMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: correctionUserText },
+            { type: 'image_url', image_url: { url: imageUrl } }
+          ]
+        });
+      } else {
+        correctionMessages.push({ role: 'user', content: correctionUserText });
+      }
 
       const correctedSolverData = await AiClient.executeWithFallback(correctionMessages, solverSchema, 'solver_response', userId, 'solver', 0.4, (token) => {
         if (onEvent) {
@@ -326,13 +402,9 @@ CRITICAL RULES FOR AUDIT:
          onEvent({ type: 'solver_draft', data: correctedSolverData });
       }
 
-      const reCriticMessages = [
-        { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}` },
-        { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================` },
-        ...recentHistory,
-        { role: 'user', content: `Fact-check the following CORRECTED Solver AI's derivation line-by-line against standard academic curriculum and the ground truth.
+      const reCriticUserText = `Fact-check the following CORRECTED Solver AI's derivation line-by-line against standard academic curriculum and the ground truth.
 
-Question: "${query}"
+Question: "${query || 'Solve the problem in the image.'}"
 
 Corrected Solver Derivation:
 ${JSON.stringify(correctedSolverData.steps, null, 2)}
@@ -344,8 +416,26 @@ CRITICAL RULES FOR AUDIT:
 - If the question is within academic scope and conceptually correct, set criticAuditStatus = "VERIFIED" and isOutOfScope = false.
 - If it contains a trick assumption, asks for out-of-scope concepts, or includes a common student/AI hallucination trap, set criticAuditStatus = "FLAGGED", isOutOfScope = true, and provide criticAuditNotes.
 - Provide a confidenceScore (0-100).
-- Mark unverified steps clearly with verified = false and provide criticFeedback.` }
+- Mark unverified steps clearly with verified = false and provide criticFeedback.`;
+
+      const reCriticMessages: any[] = [
+        { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}` },
+        { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================` },
+        ...recentHistory
       ];
+
+      if (imageUrl) {
+        reCriticMessages.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: reCriticUserText },
+            { type: 'image_url', image_url: { url: imageUrl } }
+          ]
+        });
+      } else {
+        reCriticMessages.push({ role: 'user', content: reCriticUserText });
+      }
+
 
       const reCriticData = await AiClient.executeWithFallback(reCriticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, (token) => {
         if (onEvent) {

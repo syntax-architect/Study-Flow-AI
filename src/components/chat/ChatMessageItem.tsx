@@ -186,7 +186,12 @@ if (typeof msg.content === 'object') {
                 </div>
               </div>
             ) : (
-              <p className="text-[14px] font-medium leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              <div className="flex flex-col gap-2">
+                {msg.image_url && (
+                  <img src={msg.image_url} alt="User attachment" className="rounded-lg max-w-[200px] h-auto object-cover border border-white/20 dark:border-black/20" />
+                )}
+                <p className="text-[14px] font-medium leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+              </div>
             )}
             {!isEditing && (
               <>

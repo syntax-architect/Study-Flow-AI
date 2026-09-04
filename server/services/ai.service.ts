@@ -4,6 +4,8 @@ import { AiSolverCritic } from './ai/solver-critic';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 import { appCache } from '../utils/cache';
+import { supabase } from '../lib/supabase';
+import { getExtractor } from '../utils/pipeline';
 import fs from 'fs';
 import path from 'path';
 
@@ -72,6 +74,8 @@ export class AiService {
 
     const latestQuery = messages[messages.length - 1]?.content || '';
     const retrievedContext = await AiContext.retrieveContext(latestQuery, filter);
+    const masteryContext = await AiContext.fetchUserMasteryContext(userId);
+    const memoryContext = await AiContext.retrieveUserMemory(userId || '', latestQuery, token);
 
     const pipelineSystemInstruction = `${MASTER_SYSTEM_PROMPT}
 
@@ -83,6 +87,8 @@ export class AiService {
 - When responding, explicitly reference prior turns in the conversation naturally (e.g., "As we established earlier...", "Building on your previous answer...") if the context is relevant, instead of treating this as an isolated question.
 
 ${systemInstruction}
+${masteryContext}
+${memoryContext}
 
 You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Truth. If you rely on the Ground Truth, cite it.`;
 
@@ -94,7 +100,74 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
       ...processedMessages
     ];
 
+    // Trigger async background extraction
+    if (userId) {
+      AiService.extractAndStoreMemory(userId, messages).catch(err => {
+        logger.error('[AI Engine] Background memory extraction failed:', err);
+      });
+    }
+
     return await AiClient.executeStreamWithFallback(streamMessages, 'chat', userId, token);
+  }
+
+  static async extractAndStoreMemory(userId: string, messages: any[]) {
+    // Only extract if there's enough context
+    if (!messages || messages.length < 4) return;
+    
+    // Check cache to prevent extracting memory too often
+    const cacheKey = `lastMemoryExtraction_${userId}`;
+    const lastExtracted = appCache.get<number>(cacheKey);
+    if (lastExtracted && (Date.now() - lastExtracted) < 1000 * 60 * 15) {
+      // Limit extraction to once every 15 minutes per user
+      return;
+    }
+    
+    const recentHistory = messages.slice(-8).map(m => `${m.role}: ${m.content}`).join('\n');
+    
+    const prompt = `Analyze the following chat history between a student and a tutor. 
+Identify ONE new, highly specific, and enduring fact about the student's learning profile. 
+Focus on:
+1. A specific misconception or gap in understanding (e.g. "Struggles with right-hand rule in magnetism").
+2. A preferred learning style (e.g. "Learns better with visual real-world analogies").
+3. A confirmed mastery (e.g. "Firmly understands Newtonian kinematics").
+
+If there is no clear enduring insight to extract, output exactly "NO_INSIGHT". 
+Otherwise, output ONLY the extracted fact as a single concise sentence.
+
+History:
+${recentHistory}`;
+
+    try {
+      const primaryClient = AiClient.getPrimaryClient();
+      const res = await primaryClient.chat.completions.create({
+        model: config.primaryAiModel,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 50,
+        temperature: 0.1
+      });
+      
+      const insight = res.choices[0]?.message?.content?.trim();
+      
+      if (insight && insight !== "NO_INSIGHT" && insight.length > 10) {
+        logger.info(`[AI Engine] Background extracted new memory for user ${userId}: ${insight}`);
+        
+        // Generate embedding
+        const extractor = await getExtractor();
+        const output = await extractor(insight, { pooling: 'mean', normalize: true });
+        const embedding = Array.from(output.data);
+        
+        // Store in DB
+        await supabase.from('user_memories').insert([{
+          user_id: userId,
+          content: insight,
+          embedding
+        }]);
+        
+        appCache.set(cacheKey, Date.now(), 3600); // Set cooldown
+      }
+    } catch (err) {
+      logger.error('[AI Engine] Failed to extract memory:', err);
+    }
   }
 
   static async generateTopicAudit(topicTitle: string, subtitle: string, unit: string, userId?: string, token?: string) {

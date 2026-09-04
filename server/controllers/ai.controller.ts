@@ -16,10 +16,10 @@ const getClient = (req: Request) => {
 
 export const handleSolverCritic = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { query, subject = 'Software Engineering', chatId, userId, language = 'en', messages = [] } = req.body;
+    const { query, subject = 'Software Engineering', chatId, userId, language = 'en', messages = [], imageUrl } = req.body;
 
-    if (!query) {
-      return res.status(400).json({ error: 'Query is required' });
+    if (!query && !imageUrl) {
+      return res.status(400).json({ error: 'Query or image is required' });
     }
 
     const token = req.headers.authorization?.split(' ')[1];
@@ -68,7 +68,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         }
       };
 
-      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, onEvent, userId, token);
+      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, onEvent, userId, token, imageUrl);
 
       finalResponse = {
         id: 'sol-' + Date.now(),
@@ -125,7 +125,7 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       res.write(`event: critic_verdict\ndata: ${JSON.stringify(finalResponse)}\n\n`);
       res.end();
     } else {
-      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, undefined, userId, token);
+      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, undefined, userId, token, imageUrl);
 
       finalResponse = {
         id: 'sol-' + Date.now(),

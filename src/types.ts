@@ -5,6 +5,7 @@ export interface ChatMessage {
   chat_id?: string;
   role: 'user' | 'assistant';
   content: string;
+  image_url?: string;
   is_pinned?: boolean;
   created_at?: string;
 }

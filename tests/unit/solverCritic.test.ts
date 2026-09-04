@@ -8,7 +8,8 @@ jest.mock('../../server/services/ai/context');
 jest.mock('../../server/services/ai/schemas', () => ({
   getSolverSchema: jest.fn(),
   getCriticSchema: jest.fn(),
-  getCriticTools: jest.fn()
+  getCriticTools: jest.fn(),
+  getSolverTools: jest.fn()
 }));
 jest.mock('../../server/utils/logger', () => ({
   logger: {

@@ -45,6 +45,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
   const inputRef = useRef<HTMLInputElement>(null);
   const isManualSwitch = useRef<boolean>(true);
   const [soundEnabled, setSoundEnabled] = useState(propSoundEnabled);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   const [subject, setSubject] = useState('Software Engineering');
   
@@ -281,6 +282,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
+    console.log(`[DEBUG ChatView] useEffect running for activeChatId: ${activeChatId}`);
 
     const fetchMessages = async () => {
       if (!activeChatId) {
@@ -295,6 +297,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
         });
         if (res.ok) {
           const data = await res.json();
+          console.log(`[DEBUG ChatView] Fetched ${data.length} messages for chat ${activeChatId}`, data);
           if (!ignore) setMessages(data);
         } else {
           if (!ignore) onNotify("Failed to fetch messages", "warning");
@@ -334,66 +337,47 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
     }
   ];
 
+  const processImageFile = async (file: File) => {
+    playSound('click', soundEnabled);
+    
+    // Read file as base64 data URL
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      setSelectedImage(base64String);
+      onNotify('Image attached successfully!', 'success');
+      
+      if (inputRef.current) {
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    playSound('click', soundEnabled);
-    setIsProcessingImage(true);
-
-    try {
-      const token = await getToken();
-      const formData = new FormData();
-      formData.append('image', file);
-
-      const response = await fetch('/api/vision-ocr', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to process image');
-      }
-
-      const data = await response.json();
-      if (data.text) {
-        setUserPrompt(prev => prev ? `${prev}\n\n${data.text}` : data.text);
-        onNotify('Image scanned successfully! Review the text before sending.', 'success');
-        
-        if (inputRef.current) {
-          setTimeout(() => {
-            inputRef.current?.focus();
-            if (inputRef.current) {
-              (inputRef.current as any).style.height = 'auto';
-              (inputRef.current as any).style.height = `${Math.min(inputRef.current.scrollHeight, 150)}px`;
-            }
-          }, 100);
-        }
-      } else {
-        throw new Error('No text found in image');
-      }
-    } catch (err: any) {
-      console.error('Vision OCR Error:', err);
-      onNotify(err.message || 'Failed to scan image', 'error');
-    } finally {
-      setIsProcessingImage(false);
-      if (e.target) {
-        e.target.value = ''; // Reset file input
-      }
+    await processImageFile(file);
+    if (e.target) {
+      e.target.value = ''; // Reset file input
     }
   };
 
   const handleSubmit = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
     const queryToUse = customQuery || userPrompt;
-    if (!queryToUse.trim() || loading || !userId) return;
+    if ((!queryToUse.trim() && !selectedImage) || loading || !userId) return;
 
     playSound('click', soundEnabled);
     setLoading(true);
     setUserPrompt(''); 
+    
+    // Capture image and clear state
+    const currentImage = selectedImage;
+    setSelectedImage(null);
+
     if (inputRef.current) {
       (inputRef.current as any).style.height = 'auto';
     }
@@ -403,7 +387,7 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
     // Create new chat if none is active
     if (!currentChatId) {
       try {
-        const title = queryToUse.length > 30 ? queryToUse.substring(0, 30) + '...' : queryToUse;
+        const title = queryToUse.length > 30 ? queryToUse.substring(0, 30) + '...' : (queryToUse || 'Image Upload');
         const token = await getToken();
         const res = await fetch('/api/db/chats', {
           method: 'POST',
@@ -432,7 +416,13 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
       }
     }
 
-    const userMessage: ChatMessage = { id: Date.now().toString(), role: 'user', content: queryToUse };
+    // Include image_url in the local message object if we want to display it
+    const userMessage: ChatMessage = { 
+      id: Date.now().toString(), 
+      role: 'user', 
+      content: queryToUse,
+      image_url: currentImage || undefined // Need to update ChatMessage interface
+    } as any; 
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
 
@@ -457,7 +447,8 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
           chatId: currentChatId,
           userId: userId,
           language,
-          messages: newMessages
+          messages: newMessages,
+          imageUrl: currentImage // Send to backend
         }),
       });
 
@@ -780,6 +771,9 @@ export const ChatView: React.FC<ChatViewProps> = React.memo(({
           onSubmit={handleSubmit}
           onStop={handleStop}
           onImageClick={() => fileInputRef.current?.click()}
+          onFileUpload={processImageFile}
+          selectedImage={selectedImage}
+          onClearImage={() => setSelectedImage(null)}
           onToggleListening={toggleListening}
           inputRef={inputRef as any}
         />
