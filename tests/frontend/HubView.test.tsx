@@ -60,9 +60,13 @@ describe('HubView', () => {
     const sampleBtn = screen.getByText(/In-Scope NCERT/i);
     fireEvent.click(sampleBtn);
     
-    
     expect(defaultProps.onNavigateToChatWithQuery).toHaveBeenCalledWith(
       expect.stringContaining('A car of mass 1500 kg drives at 20 m/s')
     );
+
+    // Wait for the fetch effects to settle to avoid act(...) warnings
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
   });
 });

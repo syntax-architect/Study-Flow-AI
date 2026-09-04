@@ -438,10 +438,12 @@ export const DualAiResponseView: React.FC<Props> = React.memo(({ data, preproces
 
       {/* Summary */}
       {/* Derivation Title */}
-      <h2 className="font-bold text-xl mb-3 pr-8 relative">
-        {data.title || 'Solving...'}
-        {isStreaming && <span className="absolute ml-2 animate-pulse bg-white dark:bg-[#09090b] w-2 h-5 inline-block top-1"></span>}
-      </h2>
+      {(data.title || isStreaming || isVerifying) && (
+        <h2 className="font-bold text-xl mb-3 pr-8 relative">
+          {data.title || (isVerifying ? 'Verifying...' : 'Solving...')}
+          {(isStreaming || isVerifying) && <span className="absolute ml-2 animate-pulse bg-white dark:bg-[#09090b] w-2 h-5 inline-block top-1"></span>}
+        </h2>
+      )}
       
       {data.summary && (
         <div className="text-sm opacity-80 mb-6 leading-relaxed">
