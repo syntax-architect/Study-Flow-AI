@@ -4,7 +4,7 @@ export const useSpeechRecognition = (onTranscript: (text: string) => void) => {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
-  
+
   const onTranscriptRef = useRef(onTranscript);
   useEffect(() => {
     onTranscriptRef.current = onTranscript;

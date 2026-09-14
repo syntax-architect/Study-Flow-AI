@@ -26,12 +26,8 @@ export const CopyButton: React.FC<CopyButtonProps> = ({ textToCopy, className = 
       aria-label="Copy to clipboard"
       title="Copy to clipboard"
     >
-      {copied ? (
-        <Check className="w-4 h-4 text-green-500" />
-      ) : (
-        <Copy className="w-4 h-4" />
-      )}
-      
+      {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+
       {/* Tooltip */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-10">
         {copied ? 'Copied!' : 'Copy'}

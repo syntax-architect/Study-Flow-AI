@@ -1,9 +1,22 @@
 import { Router } from 'express';
-import { 
-  getUserChats, createChat, getChatMessages, 
-  getUserMastery, getCohortAnalytics, getPersonalCohortAnalytics, getRecommendations,
-  deleteChat, deleteAllUserChats, renameChat, toggleMessagePin, flagForReview, toggleChatPin,
-  getReviewQueue, resolveReview, getFlaggedStudents
+import {
+  getUserChats,
+  createChat,
+  getChatMessages,
+  getUserMastery,
+  getUserVault,
+  getCohortAnalytics,
+  getPersonalCohortAnalytics,
+  getRecommendations,
+  deleteChat,
+  deleteAllUserChats,
+  renameChat,
+  toggleMessagePin,
+  flagForReview,
+  toggleChatPin,
+  getReviewQueue,
+  resolveReview,
+  getFlaggedStudents,
 } from '../controllers/db.controller';
 import { requireTeacher } from '../middlewares/auth';
 
@@ -17,6 +30,7 @@ router.delete('/chats/user/:userId', deleteAllUserChats);
 router.patch('/chats/:chatId', renameChat);
 router.patch('/chats/:chatId/pin', toggleChatPin);
 router.patch('/messages/:messageId/pin', toggleMessagePin);
+router.get('/vault/user/:userId', getUserVault);
 router.get('/mastery/:userId', getUserMastery);
 router.get('/analytics/cohorts/me', getPersonalCohortAnalytics);
 router.get('/analytics/cohorts', getCohortAnalytics);

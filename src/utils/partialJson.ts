@@ -53,7 +53,7 @@ export const parsePartialSolverJSON = (jsonString: string) => {
     return {
       title: 'Solving...',
       summary: '',
-      steps: []
+      steps: [],
     };
   }
 };

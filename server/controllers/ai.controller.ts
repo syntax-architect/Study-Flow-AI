@@ -16,7 +16,15 @@ const getClient = (req: Request) => {
 
 export const handleSolverCritic = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { query, subject = 'Software Engineering', chatId, userId, language = 'en', messages = [], imageUrl } = req.body;
+    const {
+      query,
+      subject = 'Software Engineering',
+      chatId,
+      userId,
+      language = 'en',
+      messages = [],
+      imageUrl,
+    } = req.body;
 
     if (!query && !imageUrl) {
       return res.status(400).json({ error: 'Query or image is required' });
@@ -27,11 +35,15 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
 
     if (chatId && query) {
       logger.debug(`[AI Controller] Saving user message immediately to chat ${chatId}`);
-      const { error: insertErr } = await getClient(req).from('messages').insert([{
-        chat_id: chatId,
-        role: 'user',
-        content: query
-      }]);
+      const { error: insertErr } = await getClient(req)
+        .from('messages')
+        .insert([
+          {
+            chat_id: chatId,
+            role: 'user',
+            content: query,
+          },
+        ]);
       if (insertErr) logger.error('[AI Controller] Error saving user message:', insertErr);
     }
 
@@ -52,6 +64,12 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
     });
 
     let finalResponse: any;
+    
+    const abortController = new AbortController();
+    req.on('close', () => {
+      logger.info('[AI Controller] Client disconnected. Aborting generation.');
+      abortController.abort();
+    });
 
     if (isStream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -78,7 +96,17 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
         }
       };
 
-      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, onEvent, userId, token, imageUrl);
+      const resultData = await AiService.generateSolverCritic(
+        query,
+        subject,
+        language,
+        sanitizedMessages,
+        onEvent,
+        userId,
+        token,
+        imageUrl,
+        abortController.signal
+      );
 
       finalResponse = {
         id: 'sol-' + Date.now(),
@@ -91,15 +119,19 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
         logger.debug(`[AI Controller] Saving assistant message to chat ${chatId}`);
-        const { error: astErr } = await getClient(req).from('messages').insert([{
-          chat_id: chatId,
-          role: 'assistant',
-          content: JSON.stringify(finalResponse)
-        }]);
+        const { error: astErr } = await getClient(req)
+          .from('messages')
+          .insert([
+            {
+              chat_id: chatId,
+              role: 'assistant',
+              content: JSON.stringify(finalResponse),
+            },
+          ]);
         if (astErr) {
-          logger.error("[AI Controller] Error saving assistant message:", astErr);
+          logger.error('[AI Controller] Error saving assistant message:', astErr);
         } else {
-          logger.debug("[AI Controller] Assistant message saved successfully.");
+          logger.debug('[AI Controller] Assistant message saved successfully.');
         }
       }
 
@@ -112,15 +144,25 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
           p_user_id: userId,
           p_topic_id: topicId,
           p_topic_title: topicTitle,
-          p_is_verified: isVerified
+          p_is_verified: isVerified,
         });
-        if (masteryErr) logger.error("Error upserting mastery:", masteryErr);
+        if (masteryErr) logger.error('Error upserting mastery:', masteryErr);
       }
 
       res.write(`event: critic_verdict\ndata: ${JSON.stringify(finalResponse)}\n\n`);
       res.end();
     } else {
-      const resultData = await AiService.generateSolverCritic(query, subject, language, sanitizedMessages, undefined, userId, token, imageUrl);
+      const resultData = await AiService.generateSolverCritic(
+        query,
+        subject,
+        language,
+        sanitizedMessages,
+        undefined,
+        userId,
+        token,
+        imageUrl,
+        abortController.signal
+      );
 
       finalResponse = {
         id: 'sol-' + Date.now(),
@@ -133,15 +175,19 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
       // Save assistant message to DB (stringified JSON)
       if (chatId && finalResponse) {
         logger.debug(`[AI Controller] Saving assistant message to chat ${chatId} (non-stream)`);
-        const { error: astErr } = await getClient(req).from('messages').insert([{
-          chat_id: chatId,
-          role: 'assistant',
-          content: JSON.stringify(finalResponse)
-        }]);
+        const { error: astErr } = await getClient(req)
+          .from('messages')
+          .insert([
+            {
+              chat_id: chatId,
+              role: 'assistant',
+              content: JSON.stringify(finalResponse),
+            },
+          ]);
         if (astErr) {
-          logger.error("[AI Controller] Error saving assistant message:", astErr);
+          logger.error('[AI Controller] Error saving assistant message:', astErr);
         } else {
-          logger.debug("[AI Controller] Assistant message saved successfully.");
+          logger.debug('[AI Controller] Assistant message saved successfully.');
         }
       }
 
@@ -154,18 +200,19 @@ export const handleSolverCritic = async (req: Request, res: Response, next: Next
           p_user_id: userId,
           p_topic_id: topicId,
           p_topic_title: topicTitle,
-          p_is_verified: isVerified
+          p_is_verified: isVerified,
         });
-        if (masteryErr) logger.error("Error upserting mastery:", masteryErr);
+        if (masteryErr) logger.error('Error upserting mastery:', masteryErr);
       }
 
       res.json(finalResponse);
     }
-
   } catch (err: any) {
     if (res.headersSent) {
       if (!res.writableEnded) {
-        res.write(`event: error\ndata: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`);
+        res.write(
+          `event: error\ndata: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`,
+        );
         res.end();
       } else {
         logger.error('Error after stream ended:', err);
@@ -185,7 +232,13 @@ export const handleAuditTopic = async (req: Request, res: Response, next: NextFu
     }
 
     const token = req.headers.authorization?.split(' ')[1];
-    const resultData = await AiService.generateTopicAudit(topicTitle, subtitle || '', unit, req.body.userId, token);
+    const resultData = await AiService.generateTopicAudit(
+      topicTitle,
+      subtitle || '',
+      unit,
+      req.body.userId,
+      token,
+    );
     res.json(resultData);
   } catch (err) {
     next(err);
@@ -200,7 +253,14 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
       return res.status(400).json({ error: 'messages array cannot be empty' });
     }
 
-    const systemInstruction = "You are StudyFlow AI, an intelligent and helpful academic study assistant. Provide clear, step-by-step explanations for the user's queries across various subjects.";
+    const systemInstruction =
+      "You are StudyFlow AI, an intelligent and helpful academic study assistant. Provide clear, step-by-step explanations for the user's queries across various subjects.";
+
+    const abortController = new AbortController();
+    req.on('close', () => {
+      logger.info('[AI Controller] Client disconnected. Aborting chat stream.');
+      abortController.abort();
+    });
 
     let originalUserContent = '';
     if (messages.length > 0) {
@@ -212,11 +272,15 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
 
     if (chatId && originalUserContent) {
       logger.debug(`[AI Controller] Saving user message immediately to chat ${chatId}`);
-      const { error: insertErr } = await getClient(req).from('messages').insert([{
-        chat_id: chatId,
-        role: 'user',
-        content: originalUserContent
-      }]);
+      const { error: insertErr } = await getClient(req)
+        .from('messages')
+        .insert([
+          {
+            chat_id: chatId,
+            role: 'user',
+            content: originalUserContent,
+          },
+        ]);
       if (insertErr) logger.error('[AI Controller] Error saving user message:', insertErr);
     }
 
@@ -236,7 +300,14 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
       fullAssistantContent = cachedResponse;
       res.write(`data: ${JSON.stringify({ content: cachedResponse })}\n\n`);
     } else {
-      const stream = await AiService.streamChat(messages, systemInstruction, { subject }, userId, token);
+      const stream = await AiService.streamChat(
+        messages,
+        systemInstruction,
+        { subject },
+        userId,
+        token,
+        abortController.signal
+      );
       for await (const chunk of stream) {
         const content = chunk.choices[0]?.delta?.content || '';
         if (content) {
@@ -250,22 +321,27 @@ export const handleChatStream = async (req: Request, res: Response, next: NextFu
     // Save messages to DB now that AI generated a response
     if (chatId) {
       if (fullAssistantContent) {
-        const { error: astErr } = await getClient(req).from('messages').insert([{
-          chat_id: chatId,
-          role: 'assistant',
-          content: fullAssistantContent
-        }]);
-        if (astErr) logger.error("Error saving assistant message:", astErr);
+        const { error: astErr } = await getClient(req)
+          .from('messages')
+          .insert([
+            {
+              chat_id: chatId,
+              role: 'assistant',
+              content: fullAssistantContent,
+            },
+          ]);
+        if (astErr) logger.error('Error saving assistant message:', astErr);
       }
     }
 
     res.write('data: [DONE]\n\n');
     res.end();
-
   } catch (err: any) {
     if (res.headersSent) {
       if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`);
+        res.write(
+          `event: error\ndata: ${JSON.stringify({ error: err.message || 'Stream error' })}\n\n`
+        );
         res.end();
       } else {
         logger.error('Error after chat stream ended:', err);
@@ -308,7 +384,9 @@ export const handleTextToSpeech = async (req: Request, res: Response, next: Next
       return res.status(400).json({ error: 'Text is required and must be a string' });
     }
     if (text.length > 5000) {
-      return res.status(400).json({ error: 'Text exceeds maximum allowed length of 5000 characters' });
+      return res
+        .status(400)
+        .json({ error: 'Text exceeds maximum allowed length of 5000 characters' });
     }
 
     const audioBuffer = await BhashiniService.textToSpeech(text, language || 'en');
@@ -361,7 +439,10 @@ export const handleStudyRoomModerate = async (req: Request, res: Response, next:
     const otherParticipants = currentParticipants.filter((p: string) => p !== lastMessage.name);
 
     if (otherParticipants.length === 0) {
-      return res.json({ response: "I see you're asking a question! Let's wait a moment to see if anyone else joins the room who might know the answer, or I can help if you want!" });
+      return res.json({
+        response:
+          "I see you're asking a question! Let's wait a moment to see if anyone else joins the room who might know the answer, or I can help if you want!",
+      });
     }
 
     const randomPeer = otherParticipants[Math.floor(Math.random() * otherParticipants.length)];
@@ -375,21 +456,21 @@ Instead, acknowledge the question and explicitly ask "${randomPeer}" (or anyone 
 Keep your response under 3 sentences, very friendly, and engaging.`;
 
     const moderationSchema = {
-      type: "object",
+      type: 'object',
       properties: {
-        response: { type: "string" }
+        response: { type: 'string' },
       },
-      required: ["response"],
-      additionalProperties: false
+      required: ['response'],
+      additionalProperties: false,
     };
 
     const result = await AiService.executeWithFallback(
-      [{ role: "system", content: prompt }],
+      [{ role: 'system', content: prompt }],
       moderationSchema,
       'moderation_response',
       undefined,
       'solver',
-      0.7
+      0.7,
     );
 
     res.json({ response: result.response || null });

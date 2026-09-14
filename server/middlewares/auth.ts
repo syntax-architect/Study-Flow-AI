@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { getAuthSupabase } from '../lib/supabase';
 import { verifyToken } from '@clerk/backend';
 
-export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const requireAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -11,7 +15,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     }
 
     const token = authHeader.split(' ')[1];
-    
+
     let decodedToken;
     try {
       // Securely verify the token cryptographic signature using Clerk
@@ -31,20 +35,26 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
     // Attach user to request securely
     (req as any).user = { id: decodedToken.sub };
-    
+
     // Overwrite the req.body.userId with the verified one to prevent spoofing
     if (req.body) {
       req.body.userId = decodedToken.sub;
     }
-    
+
     next();
   } catch (err: any) {
     console.error('Auth middleware error:', err);
-    res.status(500).json({ error: 'Internal Server Error during authentication', details: err.message });
+    res
+      .status(500)
+      .json({ error: 'Internal Server Error during authentication', details: err.message });
   }
 };
 
-export const requireTeacher = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const requireTeacher = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
     if (!userId) {
@@ -76,6 +86,8 @@ export const requireTeacher = async (req: Request, res: Response, next: NextFunc
     next();
   } catch (err: any) {
     console.error('requireTeacher middleware error:', err);
-    res.status(500).json({ error: 'Internal Server Error during authorization', details: err.message });
+    res
+      .status(500)
+      .json({ error: 'Internal Server Error during authorization', details: err.message });
   }
 };

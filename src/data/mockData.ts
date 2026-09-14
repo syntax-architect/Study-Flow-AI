@@ -27,7 +27,8 @@ export const MOCK_UNITS: UnitOverview[] = [
         title: 'Friction: Static vs Kinetic',
         subtitle: 'Upper limit f_s ≤ μ_s·N & stick-slip motion',
         status: 'FLAGGED',
-        auditDetails: 'Common misconception flagged: Static friction equals applied force until f_max, NOT always μ_s·N.',
+        auditDetails:
+          'Common misconception flagged: Static friction equals applied force until f_max, NOT always μ_s·N.',
         masteryScore: 62,
       },
       {
@@ -36,7 +37,8 @@ export const MOCK_UNITS: UnitOverview[] = [
         title: 'Circular Motion & Banking',
         subtitle: 'Centripetal force F_c = mv²/r & maximum safe speed',
         status: 'VERIFIED',
-        auditDetails: 'Level and banked road velocity constraints verified with NCERT Pg 104 citations.',
+        auditDetails:
+          'Level and banked road velocity constraints verified with NCERT Pg 104 citations.',
         masteryScore: 84,
       },
       {
@@ -86,15 +88,18 @@ export const MOCK_UNITS: UnitOverview[] = [
 export const INITIAL_CHAT_SOLUTIONS: SolverResult[] = [
   {
     id: 'sol-1',
-    query: 'A car of mass 1500 kg drives at 20 m/s on a flat circular turn of radius 50 m with μ_s = 0.6. Will it skid? Show step-by-step NCERT derivation.',
+    query:
+      'A car of mass 1500 kg drives at 20 m/s on a flat circular turn of radius 50 m with μ_s = 0.6. Will it skid? Show step-by-step NCERT derivation.',
     subject: 'JEE/NEET Physics • Laws of Motion (NCERT Ch 5)',
     title: 'Circular Motion Friction & Skidding Threshold Analysis',
-    summary: 'Derivation comparing required centripetal force F_c = mv²/r against maximum static friction f_max = μ_s·N.',
+    summary:
+      'Derivation comparing required centripetal force F_c = mv²/r against maximum static friction f_max = μ_s·N.',
     steps: [
       {
         stepNumber: 1,
         title: 'Determine Required Centripetal Force (F_c)',
-        description: 'According to NCERT Class 11 Physics Section 5.10, the horizontal centripetal force needed for curved motion is F_c = m·v² / r.',
+        description:
+          'According to NCERT Class 11 Physics Section 5.10, the horizontal centripetal force needed for curved motion is F_c = m·v² / r.',
         verified: true,
         mathBlock: 'F_c = \\frac{1500 \\times 20^2}{50} = 12{,}000 \\text{ N}',
         criticFeedback: 'VERIFIED against NCERT Pg 104 Eq 5.18. Formula application is exact.',
@@ -102,21 +107,27 @@ export const INITIAL_CHAT_SOLUTIONS: SolverResult[] = [
       {
         stepNumber: 2,
         title: 'Calculate Maximum Static Friction Available (f_max)',
-        description: 'Normal force N = m·g = 1500 × 9.8 = 14,700 N. Maximum static friction is f_max = μ_s · N.',
+        description:
+          'Normal force N = m·g = 1500 × 9.8 = 14,700 N. Maximum static friction is f_max = μ_s · N.',
         verified: true,
         mathBlock: 'f_{\\text{max}} = 0.6 \\times 14{,}700 = 8{,}820 \\text{ N}',
-        criticFeedback: 'VERIFIED against NCERT Pg 101 Section 5.9. Normal reaction balance holds on level road.',
+        criticFeedback:
+          'VERIFIED against NCERT Pg 101 Section 5.9. Normal reaction balance holds on level road.',
       },
       {
         stepNumber: 3,
         title: 'Compare Required Force vs Available Friction',
-        description: 'Since required centripetal force (12,000 N) exceeds available friction (8,820 N), the car cannot maintain the turn.',
+        description:
+          'Since required centripetal force (12,000 N) exceeds available friction (8,820 N), the car cannot maintain the turn.',
         verified: true,
-        mathBlock: 'F_c (12{,}000\\text{ N}) > f_{\\text{max}} (8{,}820\\text{ N}) \\implies \\text{CAR WILL SKID!}',
-        criticFeedback: 'VERIFIED: Conclusion logically follows. Skidding condition verified for JEE Main.',
+        mathBlock:
+          'F_c (12{,}000\\text{ N}) > f_{\\text{max}} (8{,}820\\text{ N}) \\implies \\text{CAR WILL SKID!}',
+        criticFeedback:
+          'VERIFIED: Conclusion logically follows. Skidding condition verified for JEE Main.',
       },
     ],
-    finalEquation: 'v_{\\text{max}} = \\sqrt{\\mu_s g r} = \\sqrt{0.6 \\times 9.8 \\times 50} = 17.15 \\text{ m/s} \\quad (< 20\\text{ m/s} \\implies \\text{SKIDS})',
+    finalEquation:
+      'v_{\\text{max}} = \\sqrt{\\mu_s g r} = \\sqrt{0.6 \\times 9.8 \\times 50} = 17.15 \\text{ m/s} \\quad (< 20\\text{ m/s} \\implies \\text{SKIDS})',
     citation: {
       textbook: 'NCERT Class 11 Physics Part 1',
       chapter: 'Chapter 5: Laws of Motion',
@@ -136,15 +147,18 @@ export const INITIAL_CHAT_SOLUTIONS: SolverResult[] = [
   },
   {
     id: 'sol-2',
-    query: 'A block of 5 kg rests on a rough table with μ_s = 0.4. A horizontal force of 10 N is applied. Is static friction equal to 0.4 × 5 × 9.8 = 19.6 N?',
+    query:
+      'A block of 5 kg rests on a rough table with μ_s = 0.4. A horizontal force of 10 N is applied. Is static friction equal to 0.4 × 5 × 9.8 = 19.6 N?',
     subject: 'JEE/NEET Physics • Common Misconception Trap',
     title: 'Static Friction Trap: Self-Adjusting Force Reality',
-    summary: 'Critic AI flagged a common AI hallucination / student misconception trap regarding static friction magnitude.',
+    summary:
+      'Critic AI flagged a common AI hallucination / student misconception trap regarding static friction magnitude.',
     steps: [
       {
         stepNumber: 1,
         title: 'Calculate Maximum Static Friction Limit (f_max)',
-        description: 'The MAXIMUM possible static friction is f_max = μ_s · N = 0.4 × 5 × 9.8 = 19.6 N.',
+        description:
+          'The MAXIMUM possible static friction is f_max = μ_s · N = 0.4 × 5 × 9.8 = 19.6 N.',
         verified: true,
         mathBlock: 'f_{\\text{max}} = \\mu_s N = 19.6 \\text{ N}',
         criticFeedback: 'VERIFIED: Correct calculation of upper threshold.',
@@ -152,13 +166,16 @@ export const INITIAL_CHAT_SOLUTIONS: SolverResult[] = [
       {
         stepNumber: 2,
         title: 'Evaluate Actual Static Friction Force (f_s)',
-        description: 'Static friction is a SELF-ADJUSTING FORCE! It only opposes applied force up to f_max. Since applied force F = 10 N < f_max (19.6 N), static friction f_s is EXACTLY 10 N, NOT 19.6 N!',
+        description:
+          'Static friction is a SELF-ADJUSTING FORCE! It only opposes applied force up to f_max. Since applied force F = 10 N < f_max (19.6 N), static friction f_s is EXACTLY 10 N, NOT 19.6 N!',
         verified: false,
         mathBlock: 'f_s = F_{\\text{applied}} = 10 \\text{ N} \\quad (\\neq 19.6 \\text{ N})',
-        criticFeedback: 'CRITIC ALERT: High hallucination trap rate in standard AIs! Many AIs mistakenly state friction is 19.6 N, which would accelerate the block backwards!',
+        criticFeedback:
+          'CRITIC ALERT: High hallucination trap rate in standard AIs! Many AIs mistakenly state friction is 19.6 N, which would accelerate the block backwards!',
       },
     ],
-    finalEquation: 'f_s = 10 \\text{ N} \\quad (\\text{Block remains stationary, static friction matches applied force})',
+    finalEquation:
+      'f_s = 10 \\text{ N} \\quad (\\text{Block remains stationary, static friction matches applied force})',
     citation: {
       textbook: 'NCERT Class 11 Physics Part 1',
       chapter: 'Chapter 5: Laws of Motion',
@@ -167,12 +184,14 @@ export const INITIAL_CHAT_SOLUTIONS: SolverResult[] = [
     },
     timestamp: '2026-08-13T07:30:00Z',
     criticAuditStatus: 'FLAGGED',
-    criticAuditNotes: 'HONEST WARNING: Common JEE Misconception Trap! Standard AI chatbots often hallucinate f_s = 19.6 N. Static friction self-adjusts to 10 N. Do not memorize naive μ_s·N formulas for stationary objects!',
+    criticAuditNotes:
+      'HONEST WARNING: Common JEE Misconception Trap! Standard AI chatbots often hallucinate f_s = 19.6 N. Static friction self-adjusts to 10 N. Do not memorize naive μ_s·N formulas for stationary objects!',
     isOutOfScope: true,
     pipelineLog: {
       solverDraftSummary: 'Naive AI initially assumed friction is always μ_s·N (19.6 N).',
       criticVerificationPassed: false,
-      ncertSourceMatch: 'NCERT Class 11 Pg 101 explicitly warns: "Static friction opposes impending motion up to f_s ≤ f_max".',
+      ncertSourceMatch:
+        'NCERT Class 11 Pg 101 explicitly warns: "Static friction opposes impending motion up to f_s ≤ f_max".',
       criticWarnings: [
         'Detected AI Hallucination Trap: f_s = 19.6 N implies backward acceleration without external cause!',
         'Critic AI corrected answer to f_s = 10 N.',
@@ -194,7 +213,8 @@ export const MOCK_VAULT_PROBLEMS: VaultProblem[] = [
       chapter: 'Chapter 5: Laws of Motion',
       page: 'Pg 104',
     },
-    factCheck: 'Centripetal force on a level road is provided purely by static friction: f_s = m v² / r. The maximum speed before skidding depends only on v_max = √(μ_s r g) and is independent of mass m.',
+    factCheck:
+      'Centripetal force on a level road is provided purely by static friction: f_s = m v² / r. The maximum speed before skidding depends only on v_max = √(μ_s r g) and is independent of mass m.',
     solution: INITIAL_CHAT_SOLUTIONS[0],
     params: {
       mass: 1500,
@@ -215,13 +235,15 @@ export const MOCK_VAULT_PROBLEMS: VaultProblem[] = [
       chapter: 'Chapter 5: Laws of Motion',
       page: 'Pg 105',
     },
-    factCheck: 'For a banked curve without relying on friction, the horizontal component of the normal force provides the centripetal force: N sin θ = m v² / r, and N cos θ = mg. Thus, v = √(rg tan θ).',
+    factCheck:
+      'For a banked curve without relying on friction, the horizontal component of the normal force provides the centripetal force: N sin θ = m v² / r, and N cos θ = mg. Thus, v = √(rg tan θ).',
     solution: {
       id: 'sol-403',
       query: 'Banked curve optimal speed without friction',
       subject: 'JEE Physics • Laws of Motion',
       title: 'Optimum Banking Speed Derivation v = √(rg tan θ)',
-      summary: 'Derivation of banking velocity where horizontal component of normal reaction provides centripetal force.',
+      summary:
+        'Derivation of banking velocity where horizontal component of normal reaction provides centripetal force.',
       steps: [
         {
           stepNumber: 1,
@@ -265,4 +287,3 @@ export const MOCK_COHORTS: CohortMetric[] = [
   { cohortId: 'NEET-2025-B', meanScore: 79.8, variance: 15.1, participation: 92 },
   { cohortId: 'JEE-2026-C', meanScore: 88.5, variance: 9.2, participation: 100 },
 ];
-

@@ -7,15 +7,22 @@ export const config = {
   secondaryAiApiKey: process.env.SECONDARY_AI_API_KEY,
   secondaryAiBaseUrl: process.env.SECONDARY_AI_BASE_URL || 'https://api.openai.com/v1',
   secondaryAiModel: process.env.SECONDARY_AI_MODEL || 'gpt-4o-mini',
-  
+
   solverAiApiKey: process.env.SOLVER_AI_API_KEY || process.env.PRIMARY_AI_API_KEY,
-  solverAiBaseUrl: process.env.SOLVER_AI_BASE_URL || process.env.PRIMARY_AI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai/',
+  solverAiBaseUrl:
+    process.env.SOLVER_AI_BASE_URL ||
+    process.env.PRIMARY_AI_BASE_URL ||
+    'https://generativelanguage.googleapis.com/v1beta/openai/',
   solverAiModel: process.env.SOLVER_AI_MODEL || process.env.PRIMARY_AI_MODEL || 'gemini-2.5-flash',
-  
+
   criticAiApiKey: process.env.CRITIC_AI_API_KEY || process.env.SECONDARY_AI_API_KEY,
-  criticAiBaseUrl: process.env.CRITIC_AI_BASE_URL || process.env.SECONDARY_AI_BASE_URL || 'https://openrouter.ai/api/v1',
-  criticAiModel: process.env.CRITIC_AI_MODEL || process.env.SECONDARY_AI_MODEL || 'anthropic/claude-haiku-4.5',
-  
+  criticAiBaseUrl:
+    process.env.CRITIC_AI_BASE_URL ||
+    process.env.SECONDARY_AI_BASE_URL ||
+    'https://openrouter.ai/api/v1',
+  criticAiModel:
+    process.env.CRITIC_AI_MODEL || process.env.SECONDARY_AI_MODEL || 'anthropic/claude-haiku-4.5',
+
   visionAiModel: process.env.VISION_AI_MODEL || 'gpt-4o',
   multilingualAiModel: process.env.MULTILINGUAL_AI_MODEL || 'gpt-4o-mini',
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -57,5 +64,3 @@ export const config = {
   openrouterApiKey: process.env.OPENROUTER_API_KEY || process.env.SECONDARY_AI_API_KEY,
   openrouterBaseUrl: process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1',
 };
-
-

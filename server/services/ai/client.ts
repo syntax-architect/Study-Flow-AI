@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { config } from '../../config/env';
 import { logger } from '../../utils/logger';
-import { supabase, getAuthSupabase } from '../../lib/supabase';
+import { adminSupabase } from '../../lib/supabase';
 
 export const MASTER_SYSTEM_PROMPT = `You are StudyFlow AI, an elite academic study assistant. You operate using a Dual-Engine architecture (Solver and Critic). Your primary goal is to guide students to mastery through rigorous pedagogy.
 
@@ -49,18 +49,30 @@ export class AiClient {
   static getClientForProvider(provider: string) {
     if (provider.toLowerCase() === 'groq') {
       if (!config.groqApiKey) throw new Error('Missing GROQ_API_KEY');
-      return new OpenAI({ apiKey: config.groqApiKey, baseURL: config.groqBaseUrl, dangerouslyAllowBrowser: true });
+      return new OpenAI({
+        apiKey: config.groqApiKey,
+        baseURL: config.groqBaseUrl,
+        dangerouslyAllowBrowser: true,
+      });
     } else if (provider.toLowerCase() === 'openrouter') {
       if (!config.openrouterApiKey) throw new Error('Missing OPENROUTER_API_KEY');
-      return new OpenAI({ apiKey: config.openrouterApiKey, baseURL: config.openrouterBaseUrl, dangerouslyAllowBrowser: true });
+      return new OpenAI({
+        apiKey: config.openrouterApiKey,
+        baseURL: config.openrouterBaseUrl,
+        dangerouslyAllowBrowser: true,
+      });
     } else {
       if (!config.primaryAiApiKey) throw new Error(`Missing API key for provider ${provider}`);
-      return new OpenAI({ apiKey: config.primaryAiApiKey, baseURL: config.primaryAiBaseUrl, dangerouslyAllowBrowser: true });
+      return new OpenAI({
+        apiKey: config.primaryAiApiKey,
+        baseURL: config.primaryAiBaseUrl,
+        dangerouslyAllowBrowser: true,
+      });
     }
   }
 
   static async sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   static cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -76,7 +88,21 @@ export class AiClient {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
   }
 
-  static async executeLoop(client: OpenAI, model: string, messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>, token?: string) {
+  static async executeLoop(
+    client: OpenAI,
+    model: string,
+    messages: any[],
+    jsonSchema: Record<string, any>,
+    schemaName: string,
+    userId?: string,
+    endpoint?: string,
+    temperature?: number,
+    onChunk?: (chunk: string) => void,
+    tools?: any[],
+    toolCallback?: (name: string, args: any) => Promise<any>,
+    token?: string,
+    abortSignal?: AbortSignal
+  ) {
     let currentMessages = [...messages];
 
     // INJECT SCHEMA INTO SYSTEM PROMPT FOR OPEN-SOURCE MODELS
@@ -84,68 +110,70 @@ export class AiClient {
       if (currentMessages.length > 0 && currentMessages[0].role === 'system') {
         currentMessages[0] = {
           ...currentMessages[0],
-          content: currentMessages[0].content + `\n\nCRITICAL INSTRUCTION: You MUST return a JSON object that STRICTLY matches the following schema. Ensure ALL required properties are present. DO NOT wrap your output in \`\`\`json or any other markdown. Return raw JSON only:\n${JSON.stringify(jsonSchema, null, 2)}`
+          content:
+            currentMessages[0].content +
+            `\n\nCRITICAL INSTRUCTION: You MUST return a JSON object that STRICTLY matches the following schema. Ensure ALL required properties are present. DO NOT wrap your output in \`\`\`json or any other markdown. Return raw JSON text directly as your response:\n${JSON.stringify(jsonSchema, null, 2)}`,
         };
       }
     }
 
     while (true) {
+      const isStreaming = !!onChunk;
       const response = await client.chat.completions.create({
         model,
         messages: currentMessages,
-        ...(!(tools && tools.length > 0) ? {
-          // Omit response_format entirely to bypass Groq's strict server-side JSON validation
-          // We extract JSON from markdown manually in cleanContent below.
-        } : {
-          // If tools are present, we omit response_format
-        }),
         ...(tools && tools.length > 0 ? { tools } : {}),
         ...(temperature !== undefined ? { temperature } : {}),
-        stream: !!onChunk && !(tools && tools.length > 0),
-        ...(!!onChunk && !(tools && tools.length > 0) ? { stream_options: { include_usage: true } } : {})
-      });
+        stream: isStreaming,
+        ...(isStreaming ? { stream_options: { include_usage: true } } : {}),
+      },
+      abortSignal ? { signal: abortSignal } : {}
+      );
 
-      let tokensUsed = (response as any).usage?.total_tokens || 0;
+      let tokensUsed = 0;
+      let content = '';
 
-      if (!!onChunk && !(tools && tools.length > 0)) {
-        let content = '';
+      if (isStreaming) {
+        let toolCalls: any[] = [];
+        
         for await (const chunk of response as any) {
           if (chunk.usage) tokensUsed = chunk.usage.total_tokens;
-          const token = chunk.choices[0]?.delta?.content || '';
-          if (token) {
-            content += token;
-            onChunk(token);
+          const delta = chunk.choices[0]?.delta;
+          if (!delta) continue;
+          
+          if (delta.content) {
+            content += delta.content;
+            if (onChunk) onChunk(delta.content);
+          }
+          
+          if (delta.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              if (!toolCalls[tc.index]) {
+                toolCalls[tc.index] = {
+                  id: tc.id,
+                  type: 'function',
+                  function: { name: tc.function?.name || '', arguments: '' }
+                };
+              }
+              if (tc.function?.arguments) {
+                toolCalls[tc.index].function.arguments += tc.function.arguments;
+              }
+            }
           }
         }
+
         if (userId && endpoint && tokensUsed > 0) {
-          const _client = token ? getAuthSupabase(token) : supabase;
-          _client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => {
-            if (error) logger.error('[Usage Logger] Error:', error);
-          });
+          adminSupabase
+            .from('usage_log')
+            .insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }])
+            .then(({ error }) => {
+              if (error) logger.error('[Usage Logger] Error:', error);
+            });
         }
-        if (content) {
-          try {
-            return JSON.parse(content);
-          } catch (e) {
-            logger.error('[AI Engine] Failed to parse JSON stream chunk:', e);
-            return {};
-          }
-        }
-        return {};
-      }
 
-      if (userId && endpoint && tokensUsed > 0) {
-        const _client = token ? getAuthSupabase(token) : supabase;
-        _client.from('usage_log').insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }]).then(({error}) => {
-          if (error) logger.error('[Usage Logger] Error:', error);
-        });
-      }
-
-      const message = (response as any).choices[0].message;
-      if (message.tool_calls && message.tool_calls.length > 0 && toolCallback) {
-        currentMessages.push(message);
-        for (const toolCall of message.tool_calls) {
-          if (toolCall.type === 'function') {
+        if (toolCalls.length > 0 && toolCallback) {
+          currentMessages.push({ role: 'assistant', content: content || null, tool_calls: toolCalls });
+          for (const toolCall of toolCalls) {
             try {
               const args = JSON.parse(toolCall.function.arguments);
               logger.info(`[AI Engine] Tool call: ${toolCall.function.name}(${toolCall.function.arguments})`);
@@ -153,24 +181,59 @@ export class AiClient {
               currentMessages.push({
                 role: 'tool',
                 tool_call_id: toolCall.id,
-                content: JSON.stringify(result)
+                content: JSON.stringify(result),
               });
             } catch (e: any) {
               currentMessages.push({
                 role: 'tool',
                 tool_call_id: toolCall.id,
-                content: JSON.stringify({ error: String(e.message) })
+                content: JSON.stringify({ error: String(e.message) }),
               });
             }
           }
+          continue;
         }
-        continue;
+
+      } else {
+        tokensUsed = (response as any).usage?.total_tokens || 0;
+        const message = (response as any).choices[0].message;
+        content = message.content || '';
+        
+        if (userId && endpoint && tokensUsed > 0) {
+          adminSupabase
+            .from('usage_log')
+            .insert([{ user_id: userId, endpoint, tokens_used: tokensUsed }])
+            .then(({ error }) => {
+              if (error) logger.error('[Usage Logger] Error:', error);
+            });
+        }
+
+        if (message.tool_calls && message.tool_calls.length > 0 && toolCallback) {
+          currentMessages.push(message);
+          for (const toolCall of message.tool_calls) {
+            if (toolCall.type === 'function') {
+              try {
+                const args = JSON.parse(toolCall.function.arguments);
+                logger.info(`[AI Engine] Tool call: ${toolCall.function.name}(${toolCall.function.arguments})`);
+                const result = await toolCallback(toolCall.function.name, args);
+                currentMessages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify(result),
+                });
+              } catch (e: any) {
+                currentMessages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify({ error: String(e.message) }),
+                });
+              }
+            }
+          }
+          continue;
+        }
       }
 
-      const content = message.content || '';
-      if (onChunk && content) {
-        onChunk(content);
-      }
       let cleanContent = content;
       if (cleanContent) {
         const match = cleanContent.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
@@ -191,7 +254,19 @@ export class AiClient {
     }
   }
 
-  static async executeWithFallback(messages: any[], jsonSchema: Record<string, any>, schemaName: string, userId?: string, endpoint?: string, temperature?: number, onChunk?: (chunk: string) => void, tools?: any[], toolCallback?: (name: string, args: any) => Promise<any>, token?: string) {
+  static async executeWithFallback(
+    messages: any[],
+    jsonSchema: Record<string, any>,
+    schemaName: string,
+    userId?: string,
+    endpoint?: string,
+    temperature?: number,
+    onChunk?: (chunk: string) => void,
+    tools?: any[],
+    toolCallback?: (name: string, args: any) => Promise<any>,
+    token?: string,
+    abortSignal?: AbortSignal
+  ) {
     if (config.useNewAiArchitecture) {
       let provider = config.routerProvider;
       let model = config.routerModel;
@@ -223,7 +298,10 @@ export class AiClient {
             if (part.type === 'image_url') {
               hasImage = true;
             }
-            if (part.type === 'text' && (hindiRegex.test(part.text) || bengaliRegex.test(part.text))) {
+            if (
+              part.type === 'text' &&
+              (hindiRegex.test(part.text) || bengaliRegex.test(part.text))
+            ) {
               hasMultilingual = true;
             }
           }
@@ -242,9 +320,26 @@ export class AiClient {
 
       while (attempt < maxRetries) {
         try {
-          logger.info(`[AI Engine] Attempt ${attempt + 1}/${maxRetries} with ${provider} (${model}) for ${endpoint || 'default'}...`);
-          return await this.executeLoop(client, model, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
+          logger.info(
+            `[AI Engine] Attempt ${attempt + 1}/${maxRetries} with ${provider} (${model}) for ${endpoint || 'default'}...`,
+          );
+          return await this.executeLoop(
+            client,
+            model,
+            messages,
+            jsonSchema,
+            schemaName,
+            userId,
+            endpoint,
+            temperature,
+            onChunk,
+            tools,
+            toolCallback,
+            token,
+            abortSignal
+          );
         } catch (error: any) {
+          if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
           logger.warn(`[AI Engine] ${provider} attempt ${attempt + 1} failed:`, error.message);
           attempt++;
           if (attempt >= maxRetries) break;
@@ -254,13 +349,31 @@ export class AiClient {
       }
 
       const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
-      const fallbackModel = fallbackProvider === 'groq' ? 'qwen/qwen3.6-27b' : 'google/gemini-2.0-flash-001';
-      logger.warn(`[AI Engine] Falling back to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'default'}...`);
+      const fallbackModel =
+        fallbackProvider === 'groq' ? 'llama-3.1-70b-versatile' : 'google/gemini-2.0-flash-001';
+      logger.warn(
+        `[AI Engine] Falling back to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'default'}...`,
+      );
       const fallbackClient = this.getClientForProvider(fallbackProvider);
 
       try {
-        return await this.executeLoop(fallbackClient, fallbackModel, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
+        return await this.executeLoop(
+          fallbackClient,
+          fallbackModel,
+          messages,
+          jsonSchema,
+          schemaName,
+          userId,
+          endpoint,
+          temperature,
+          onChunk,
+          tools,
+          toolCallback,
+          token,
+          abortSignal
+        );
       } catch (error: any) {
+        if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
         throw new Error(`AI Engine Exhausted all retries. Final Fallback Error: ${error.message}`);
       }
     }
@@ -304,7 +417,10 @@ export class AiClient {
           if (part.type === 'image_url') {
             hasImage = true;
           }
-          if (part.type === 'text' && (hindiRegex.test(part.text) || bengaliRegex.test(part.text))) {
+          if (
+            part.type === 'text' &&
+            (hindiRegex.test(part.text) || bengaliRegex.test(part.text))
+          ) {
             hasMultilingual = true;
           }
         }
@@ -317,15 +433,34 @@ export class AiClient {
     } else if (hasMultilingual && endpoint !== 'critic' && endpoint !== 'solver') {
       // Don't override specialized solver/critic models for language routing
       modelToUse = config.multilingualAiModel;
-      logger.info(`[AI Engine] Hindi/Bengali detected. Switching to specialized model: ${modelToUse}`);
+      logger.info(
+        `[AI Engine] Hindi/Bengali detected. Switching to specialized model: ${modelToUse}`,
+      );
     }
 
     try {
       if (!primaryApiKey) throw new Error(`Missing primary API key for endpoint: ${endpoint}`);
       const primaryClient = new OpenAI({ apiKey: primaryApiKey, baseURL: primaryBaseUrl });
-      logger.info(`[AI Engine] Attempting generation with Primary API (${modelToUse}) for ${endpoint || 'default'}...`);
-      return await this.executeLoop(primaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
-    } catch (error) {
+      logger.info(
+        `[AI Engine] Attempting generation with Primary API (${modelToUse}) for ${endpoint || 'default'}...`,
+      );
+      return await this.executeLoop(
+        primaryClient,
+        modelToUse,
+        messages,
+        jsonSchema,
+        schemaName,
+        userId,
+        endpoint,
+        temperature,
+        onChunk,
+        tools,
+        toolCallback,
+        token,
+        abortSignal
+      );
+    } catch (error: any) {
+      if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
       logger.warn(`[AI Engine] Primary API failed:`, error);
       primaryError = error;
     }
@@ -333,9 +468,26 @@ export class AiClient {
     try {
       if (!secondaryApiKey) throw new Error(`Missing secondary API key for endpoint: ${endpoint}`);
       const secondaryClient = new OpenAI({ apiKey: secondaryApiKey, baseURL: secondaryBaseUrl });
-      logger.info(`[AI Engine] Attempting generation with Secondary API (${modelToUse}) for ${endpoint || 'default'}...`);
-      return await this.executeLoop(secondaryClient, modelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
-    } catch (error) {
+      logger.info(
+        `[AI Engine] Attempting generation with Secondary API (${modelToUse}) for ${endpoint || 'default'}...`,
+      );
+      return await this.executeLoop(
+        secondaryClient,
+        modelToUse,
+        messages,
+        jsonSchema,
+        schemaName,
+        userId,
+        endpoint,
+        temperature,
+        onChunk,
+        tools,
+        toolCallback,
+        token,
+        abortSignal
+      );
+    } catch (error: any) {
+      if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
       logger.error(`[AI Engine] Secondary API also failed:`, error);
       secondaryError = error;
     }
@@ -347,23 +499,50 @@ export class AiClient {
           const fallbackKey = config.fallbackApiKeys[i];
           const fallbackClient = new OpenAI({
             apiKey: fallbackKey,
-            baseURL: config.secondaryAiBaseUrl,
+            baseURL: config.groqBaseUrl,
           });
-          const groqModelToUse = "qwen/qwen3.6-27b";
-          logger.info(`[AI Engine] Attempting generation with Fallback API ${i + 1} (${groqModelToUse})...`);
-          return await this.executeLoop(fallbackClient, groqModelToUse, messages, jsonSchema, schemaName, userId, endpoint, temperature, onChunk, tools, toolCallback, token);
-        } catch (error) {
+          const groqModelToUse = 'llama-3.1-70b-versatile';
+          logger.info(
+            `[AI Engine] Attempting generation with Fallback API ${i + 1} (${groqModelToUse})...`,
+          );
+          return await this.executeLoop(
+            fallbackClient,
+            groqModelToUse,
+            messages,
+            jsonSchema,
+            schemaName,
+            userId,
+            endpoint,
+            temperature,
+            onChunk,
+            tools,
+            toolCallback,
+            token,
+            abortSignal
+          );
+        } catch (error: any) {
+          if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
           logger.error(`[AI Engine] Fallback API ${i + 1} failed:`, error);
           fallbackErrors.push(error);
         }
       }
     }
 
-    const fallbackErrorMsg = fallbackErrors.map((e, idx) => `[FB${idx+1}] ${e?.message}`).join(', ');
-    throw new Error(`AI Engine Failure: Exhausted all keys. Primary Error: ${primaryError?.message}. Secondary Error: ${secondaryError?.message}. Fallback Errors: ${fallbackErrorMsg}`);
+    const fallbackErrorMsg = fallbackErrors
+      .map((e, idx) => `[FB${idx + 1}] ${e?.message}`)
+      .join(', ');
+    throw new Error(
+      `AI Engine Failure: Exhausted all keys. Primary Error: ${primaryError?.message}. Secondary Error: ${secondaryError?.message}. Fallback Errors: ${fallbackErrorMsg}`,
+    );
   }
 
-  static async executeStreamWithFallback(messages: any[], endpoint?: string, userId?: string, token?: string) {
+  static async executeStreamWithFallback(
+    messages: any[],
+    endpoint?: string,
+    userId?: string,
+    token?: string,
+    abortSignal?: AbortSignal
+  ) {
     let modelToUse = config.primaryAiModel;
     let hasImage = false;
     let hasMultilingual = false;
@@ -381,7 +560,10 @@ export class AiClient {
           if (part.type === 'image_url') {
             hasImage = true;
           }
-          if (part.type === 'text' && (hindiRegex.test(part.text) || bengaliRegex.test(part.text))) {
+          if (
+            part.type === 'text' &&
+            (hindiRegex.test(part.text) || bengaliRegex.test(part.text))
+          ) {
             hasMultilingual = true;
           }
         }
@@ -404,15 +586,21 @@ export class AiClient {
 
       while (attempt < maxRetries) {
         try {
-          logger.info(`[AI Engine] Attempt ${attempt + 1}/${maxRetries} stream with ${provider} (${modelToUse}) for ${endpoint || 'conversation'}...`);
+          logger.info(
+            `[AI Engine] Attempt ${attempt + 1}/${maxRetries} stream with ${provider} (${modelToUse}) for ${endpoint || 'conversation'}...`,
+          );
           const stream = await client.chat.completions.create({
             model: modelToUse,
             messages,
             stream: true,
-          });
+          }, abortSignal ? { signal: abortSignal } : undefined);
           return stream;
         } catch (error: any) {
-          logger.warn(`[AI Engine] ${provider} stream attempt ${attempt + 1} failed:`, error.message);
+          if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
+          logger.warn(
+            `[AI Engine] ${provider} stream attempt ${attempt + 1} failed:`,
+            error.message,
+          );
           attempt++;
           if (attempt >= maxRetries) break;
           const delay = Math.pow(2, attempt) * 1000;
@@ -421,8 +609,11 @@ export class AiClient {
       }
 
       const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
-      const fallbackModel = fallbackProvider === 'groq' ? 'qwen/qwen3.6-27b' : 'google/gemini-2.0-flash-001';
-      logger.warn(`[AI Engine] Falling back stream to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'conversation'}...`);
+      const fallbackModel =
+        fallbackProvider === 'groq' ? 'llama-3.1-70b-versatile' : 'google/gemini-2.0-flash-001';
+      logger.warn(
+        `[AI Engine] Falling back stream to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'conversation'}...`,
+      );
       const fallbackClient = this.getClientForProvider(fallbackProvider);
 
       try {
@@ -430,9 +621,12 @@ export class AiClient {
           model: fallbackModel,
           messages,
           stream: true,
-        });
+        }, abortSignal ? { signal: abortSignal } : undefined);
       } catch (error: any) {
-        throw new Error(`AI Engine Stream Exhausted all retries. Final Fallback Error: ${error.message}`);
+        if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
+        throw new Error(
+          `AI Engine Stream Exhausted all retries. Final Fallback Error: ${error.message}`,
+        );
       }
     }
 
@@ -453,9 +647,10 @@ export class AiClient {
         model: modelToUse,
         messages,
         stream: true,
-      });
+      }, abortSignal ? { signal: abortSignal } : undefined);
       return stream;
-    } catch (error) {
+    } catch (error: any) {
+      if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
       logger.warn(`[AI Engine] Primary API stream failed:`, error);
       primaryError = error;
     }
@@ -467,9 +662,10 @@ export class AiClient {
         model: modelToUse,
         messages,
         stream: true,
-      });
+      }, abortSignal ? { signal: abortSignal } : undefined);
       return stream;
     } catch (error: any) {
+      if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
       logger.warn(`[AI Engine] Secondary API stream also failed:`, error);
       secondaryError = error;
     }
@@ -480,22 +676,27 @@ export class AiClient {
           const fallbackKey = config.fallbackApiKeys[i];
           const fallbackClient = new OpenAI({
             apiKey: fallbackKey,
-            baseURL: config.secondaryAiBaseUrl,
+            baseURL: config.groqBaseUrl,
           });
-          const groqModelToUseStream = "qwen/qwen3.6-27b";
-          logger.info(`[AI Engine] Attempting stream with Fallback API ${i + 1} (${groqModelToUseStream})...`);
+          const groqModelToUseStream = 'llama-3.1-70b-versatile';
+          logger.info(
+            `[AI Engine] Attempting stream with Fallback API ${i + 1} (${groqModelToUseStream})...`,
+          );
           const stream = await fallbackClient.chat.completions.create({
-            model: modelToUse,
+            model: groqModelToUseStream,
             messages,
             stream: true,
-          });
+          }, abortSignal ? { signal: abortSignal } : undefined);
           return stream;
-        } catch (error) {
+        } catch (error: any) {
+          if (error.name === 'AbortError' || error.message?.includes('AbortError')) throw error;
           logger.error(`[AI Engine] Fallback API ${i + 1} stream failed:`, error);
         }
       }
     }
 
-    throw new Error(`AI Engine Stream Failure. Primary Error: ${(primaryError as any)?.message}. Secondary Error: ${secondaryError?.message}`);
+    throw new Error(
+      `AI Engine Stream Failure. Primary Error: ${(primaryError as any)?.message}. Secondary Error: ${secondaryError?.message}`,
+    );
   }
 }

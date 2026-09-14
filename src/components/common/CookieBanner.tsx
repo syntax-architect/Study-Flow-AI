@@ -45,11 +45,16 @@ export const CookieBanner: React.FC = () => {
                   Cookie Preferences
                 </h3>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 max-w-2xl">
-                  We use cookies to improve your experience, analyze site traffic, and support our Dual-AI Fact-Checker systems. Read our <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">Privacy Policy</a>.
+                  We use cookies to improve your experience, analyze site traffic, and support our
+                  Dual-AI Fact-Checker systems. Read our{' '}
+                  <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">
+                    Privacy Policy
+                  </a>
+                  .
                 </p>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-3 w-full md:w-auto shrink-0 mt-2 md:mt-0">
               <button
                 onClick={handleDecline}
@@ -63,7 +68,7 @@ export const CookieBanner: React.FC = () => {
               >
                 Accept All
               </button>
-              <button 
+              <button
                 onClick={handleDecline}
                 className="p-2 rounded-xl text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-white/5 transition-colors absolute top-2 right-2 md:relative md:top-auto md:right-auto"
                 aria-label="Close"

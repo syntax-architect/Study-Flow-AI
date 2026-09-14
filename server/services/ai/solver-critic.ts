@@ -3,18 +3,29 @@ import { config } from '../../config/env';
 import { appCache } from '../../utils/cache';
 import { logger } from '../../utils/logger';
 import { evaluateExpression } from '../../utils/mathSandbox';
-import { executeJavascript } from '../../utils/codeSandbox';
+import { executePython } from '../../utils/pistonSandbox';
+
 import { getExtractor } from '../../utils/pipeline';
 import { AiClient, MASTER_SYSTEM_PROMPT } from './client';
 import { AiContext } from './context';
 import { getSolverSchema, getCriticSchema, getCriticTools, getSolverTools } from './schemas';
 
 export class AiSolverCritic {
-  static async generateSolverCritic(query: string, subject: string, language: string = 'en', messages: any[] = [], onEvent?: (event: any) => void, userId?: string, token?: string, imageUrl?: string) {
+  static async generateSolverCritic(
+    query: string,
+    subject: string,
+    language: string = 'en',
+    messages: any[] = [],
+    onEvent?: (event: any) => void,
+    userId?: string,
+    token?: string,
+    imageUrl?: string,
+    abortSignal?: AbortSignal
+  ) {
     const languageMap: Record<string, string> = {
-      'en': 'English',
-      'bn': 'Bengali (Use ONLY proper Bengali script / বাংলা লিপি for ALL text. NEVER use English/Latin letters for Bengali words. No Romanized Bengali.)',
-      'hi': 'Hindi (Use ONLY proper Devanagari script / देवनागरी for ALL text. NEVER use English/Latin letters for Hindi words. No Romanized Hindi.)'
+      en: 'English',
+      bn: 'Bengali (Use ONLY proper Bengali script / বাংলা লিপি for ALL text. NEVER use English/Latin letters for Bengali words. No Romanized Bengali.)',
+      hi: 'Hindi (Use ONLY proper Devanagari script / देवनागरी for ALL text. NEVER use English/Latin letters for Hindi words. No Romanized Hindi.)',
     };
     const langName = languageMap[language] || language;
 
@@ -24,39 +35,67 @@ export class AiSolverCritic {
         intent = 'HARD_ACADEMIC';
       } else if ((query || '').length < 1000) {
         const primaryClient = AiClient.getPrimaryClient();
-        const shortHistory = messages.slice(-4).map(m => ({ role: m.role, content: m.content }));
-        
+        const shortHistory = messages.slice(-4).map((m) => ({ role: m.role, content: m.content }));
+
         const normalizedQuery = query.toLowerCase().trim();
-        const casualGreetings = ['hello', 'hi', 'hey', 'yo', 'sup', 'what\'s up', 'whats up', 'how are you', 'good morning', 'good evening', 'good afternoon', 'write a python script', 'write a script'];
-        
-        if (casualGreetings.some(g => normalizedQuery.includes(g)) || (normalizedQuery.length < 20 && !/\d/.test(normalizedQuery))) {
+        const casualGreetings = [
+          'hello',
+          'hi',
+          'hey',
+          'yo',
+          'sup',
+          "what's up",
+          'whats up',
+          'how are you',
+          'good morning',
+          'good evening',
+          'good afternoon',
+          'write a python script',
+          'write a script',
+        ];
+
+        if (
+          casualGreetings.some((g) => normalizedQuery.includes(g)) ||
+          (normalizedQuery.length < 20 && !/\d/.test(normalizedQuery))
+        ) {
           intent = 'CONVERSATION';
         } else {
           try {
-            const client = config.useNewAiArchitecture ? AiClient.getClientForProvider(config.routerProvider) : AiClient.getPrimaryClient();
-            const routerModel = config.useNewAiArchitecture ? config.routerModel : (config.multilingualAiModel || config.primaryAiModel);
+            const client = config.useNewAiArchitecture
+              ? AiClient.getClientForProvider(config.routerProvider)
+              : AiClient.getPrimaryClient();
+            const routerModel = config.useNewAiArchitecture
+              ? config.routerModel
+              : config.multilingualAiModel || config.primaryAiModel;
             const intentRes = await client.chat.completions.create({
               model: routerModel,
               messages: [
-                { role: 'system', content: 'You are a strict router. Classify the user\'s message into EXACTLY one word: "HARD_ACADEMIC", "EASY_ACADEMIC", or "CONVERSATION". No punctuation or explanation.\n- Output "HARD_ACADEMIC" ONLY for complex physics, math, chemistry, or rigorous science problems that require numeric calculation, mathematical derivation, formulas, or a step-by-step analytical solver.\n- Output "EASY_ACADEMIC" for simple factual academic questions, definitions, or basic conceptual explanations.\n- Output "CONVERSATION" for everything else, including general knowledge, writing help, coding, casual reasoning, small talk, and greetings.' },
+                {
+                  role: 'system',
+                  content:
+                    'You are a strict router. Classify the user\'s message into EXACTLY one word: "HARD_ACADEMIC", "EASY_ACADEMIC", or "CONVERSATION". No punctuation or explanation.\n- Output "HARD_ACADEMIC" ONLY for complex physics, math, chemistry, or rigorous science problems that require numeric calculation, mathematical derivation, formulas, or a step-by-step analytical solver.\n- Output "EASY_ACADEMIC" for simple factual academic questions, definitions, or basic conceptual explanations.\n- Output "CONVERSATION" for everything else, including general knowledge, writing help, coding, casual reasoning, small talk, and greetings.',
+                },
                 { role: 'user', content: 'Solve 2x^2 + 5x - 3 = 0' },
                 { role: 'assistant', content: 'HARD_ACADEMIC' },
-                { role: 'user', content: 'What is Newton\'s first law?' },
+                { role: 'user', content: "What is Newton's first law?" },
                 { role: 'assistant', content: 'EASY_ACADEMIC' },
                 { role: 'user', content: 'Write a python script to parse JSON' },
                 { role: 'assistant', content: 'CONVERSATION' },
                 { role: 'user', content: 'What caused the fall of the Roman Empire?' },
                 { role: 'assistant', content: 'CONVERSATION' },
-                { role: 'user', content: 'Calculate the tension in the rope if mass is 5kg and a=2m/s^2' },
+                {
+                  role: 'user',
+                  content: 'Calculate the tension in the rope if mass is 5kg and a=2m/s^2',
+                },
                 { role: 'assistant', content: 'HARD_ACADEMIC' },
                 { role: 'user', content: 'Hello bro' },
                 { role: 'assistant', content: 'CONVERSATION' },
                 { role: 'user', content: 'What is a black hole?' },
                 { role: 'assistant', content: 'EASY_ACADEMIC' },
-                { role: 'user', content: query }
+                { role: 'user', content: query },
               ],
               max_tokens: 5,
-              temperature: 0.1
+              temperature: 0.1,
             });
             intent = intentRes.choices[0].message.content?.trim().toUpperCase() || 'HARD_ACADEMIC';
           } catch (e) {
@@ -66,11 +105,14 @@ export class AiSolverCritic {
 
         if (intent.includes('CONVERSATION')) {
           const convMessages = [
-            { role: 'system', content: `You are StudyFlow AI, an advanced and highly capable AI assistant. You confidently answer general knowledge questions, write code, explain conceptual definitions, and engage in casual conversation. Respond naturally and directly in ${langName}. You are a fully capable assistant; do not force the user to study if they ask for writing help, general information, or just want to chat.` },
+            {
+              role: 'system',
+              content: `You are StudyFlow AI, an advanced and highly capable AI assistant. You confidently answer general knowledge questions, write code, explain conceptual definitions, and engage in casual conversation. Respond naturally and directly in ${langName}. You are a fully capable assistant; do not force the user to study if they ask for writing help, general information, or just want to chat.`,
+            },
             ...shortHistory,
-            { role: 'user', content: query }
+            { role: 'user', content: query },
           ];
-          
+
           if (onEvent) {
             const stream = await AiClient.executeStreamWithFallback(convMessages, 'conversation');
             let fullText = '';
@@ -91,7 +133,10 @@ export class AiSolverCritic {
                 fullText += content;
               }
             }
-            return { isConversation: true, content: fullText || 'Hello! How can I help you with your studies today?' };
+            return {
+              isConversation: true,
+              content: fullText || 'Hello! How can I help you with your studies today?',
+            };
           }
         }
       }
@@ -105,45 +150,66 @@ export class AiSolverCritic {
     }
 
     let summarizedContext = '';
-    let recentHistory = historyToUse.map(m => ({ role: m.role, content: m.content }));
+    let recentHistory = historyToUse.map((m) => ({ role: m.role, content: m.content }));
     if (historyToUse.length > 12) {
       const earlierMessages = historyToUse.slice(0, -6);
-      recentHistory = historyToUse.slice(-6).map(m => ({ role: m.role, content: m.content }));
-      
-      const earlierHistoryText = earlierMessages.map((m: any) => `${m.role}: ${m.content}`).join('\\n');
+      recentHistory = historyToUse.slice(-6).map((m) => ({ role: m.role, content: m.content }));
+
+      const earlierHistoryText = earlierMessages
+        .map((m: any) => `${m.role}: ${m.content}`)
+        .join('\\n');
       const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
-      
+
       try {
-        const client = config.useNewAiArchitecture ? AiClient.getClientForProvider(config.routerProvider) : AiClient.getPrimaryClient();
-        const routerModel = config.useNewAiArchitecture ? config.routerModel : config.primaryAiModel;
+        const client = config.useNewAiArchitecture
+          ? AiClient.getClientForProvider(config.routerProvider)
+          : AiClient.getPrimaryClient();
+        const routerModel = config.useNewAiArchitecture
+          ? config.routerModel
+          : config.primaryAiModel;
         const summaryRes = await client.chat.completions.create({
           model: routerModel,
           messages: [{ role: 'user', content: summaryPrompt }],
           max_tokens: 150,
-          temperature: 0.1
+          temperature: 0.1,
         });
         summarizedContext = summaryRes.choices[0]?.message?.content || '';
       } catch (err) {
         logger.warn('[AI Engine] Summarization failed, falling back to truncated history:', err);
       }
     }
-    
-    const historyText = recentHistory.map(m => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`).join('\\n');
-    
-    const ncertContext = await AiContext.advancedRetrieveContext(query, historyText, { subject }, userId);
+
+    const historyText = recentHistory
+      .map((m) => `${m.role === 'user' ? 'Student' : 'Tutor'}: ${m.content}`)
+      .join('\\n');
+
+    const ncertContext = await AiContext.advancedRetrieveContext(
+      query,
+      historyText,
+      { subject },
+      userId,
+    );
 
     const languageInstruction = `Respond entirely in ${langName}, including step descriptions and citation notes, but keep mathematical notation and variable names in English/standard math notation.`;
     const masteryContext = await AiContext.fetchUserMasteryContext(userId);
-    
-    const systemInstruction = MASTER_SYSTEM_PROMPT + `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}\n\nWhen responding, explicitly reference prior turns in the conversation naturally (e.g., "As we established earlier...", "Building on your previous answer...") if the context is relevant, instead of treating this as an isolated question.\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.`;
+
+    const systemInstruction =
+      MASTER_SYSTEM_PROMPT +
+      `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}\n\nWhen responding, explicitly reference prior turns in the conversation naturally (e.g., "As we established earlier...", "Building on your previous answer...") if the context is relevant, instead of treating this as an isolated question.\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.`;
 
     const solverMessages: any[] = [
       { role: 'system', content: systemInstruction },
-      { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.` }
+      {
+        role: 'system',
+        content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.`,
+      },
     ];
 
     if (summarizedContext) {
-      solverMessages.push({ role: 'system', content: `Previous Context Summary: ${summarizedContext}` });
+      solverMessages.push({
+        role: 'system',
+        content: `Previous Context Summary: ${summarizedContext}`,
+      });
     }
 
     solverMessages.push(...recentHistory);
@@ -151,22 +217,33 @@ export class AiSolverCritic {
       solverMessages.push({
         role: 'user',
         content: [
-          { type: 'text', text: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query || 'Solve the problem in the image.'}"` },
-          { type: 'image_url', image_url: { url: imageUrl } }
-        ]
+          {
+            type: 'text',
+            text: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query || 'Solve the problem in the image.'}"`,
+          },
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
       });
     } else {
-      solverMessages.push({ role: 'user', content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"` });
+      solverMessages.push({
+        role: 'user',
+        content: `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query}"`,
+      });
     }
-    
+
     const solverSchema = getSolverSchema();
     const solverTools = getSolverTools();
     const solverToolHandler = async (name: string, args: any) => {
-      if (name === "execute_javascript") {
-        logger.info(`[AI Engine] Solver executing JS: ${args.code}`);
-        return { result: executeJavascript(args.code) };
+      if (name === 'evaluate_expression') {
+        logger.info(`[AI Engine] Solver evaluating math: ${args.expression}`);
+        return { result: evaluateExpression(args.expression) };
       }
-      return { error: "Unknown tool" };
+      if (name === 'execute_python') {
+        logger.info(`[AI Engine] Solver executing Python: \n${args.code}`);
+        const output = await executePython(args.code);
+        return { result: output };
+      }
+      return { error: 'Unknown tool' };
     };
 
     const historyString = JSON.stringify(recentHistory);
@@ -185,7 +262,7 @@ export class AiSolverCritic {
       const extractor = await getExtractor();
       const output = await extractor(query, { pooling: 'mean', normalize: true });
       queryEmbedding = Array.from(output.data);
-      
+
       const now = Date.now();
       for (const [key, item] of appCache.entries()) {
         if (key.startsWith('semanticCache_') && item.expiry > now) {
@@ -193,7 +270,9 @@ export class AiSolverCritic {
           if (cachedData.subject === subject && cachedData.language === language) {
             const similarity = AiClient.cosineSimilarity(queryEmbedding, cachedData.embedding);
             if (similarity > 0.93) {
-              logger.info(`[AI Engine] Serving semantic cache match (similarity: ${(similarity * 100).toFixed(1)}%).`);
+              logger.info(
+                `[AI Engine] Serving semantic cache match (similarity: ${(similarity * 100).toFixed(1)}%).`,
+              );
               if (onEvent) {
                 onEvent({ type: 'solver_draft', data: cachedData.response });
               }
@@ -207,26 +286,62 @@ export class AiSolverCritic {
     }
 
     const solverPromises = [
-      AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.3, (token) => {
-        if (onEvent) {
-          onEvent({ type: 'solver_chunk', data: { content: token } });
-        }
-      }, solverTools, solverToolHandler)
+      AiClient.executeWithFallback(
+        solverMessages,
+        solverSchema,
+        'solver_response',
+        userId,
+        'solver',
+        0.3,
+        (token) => {
+          if (onEvent) {
+            onEvent({ type: 'solver_chunk', data: { content: token } });
+          }
+        },
+        solverTools,
+        solverToolHandler,
+        token,
+        abortSignal
+      ),
     ];
-    
+
     if (intent === 'HARD_ACADEMIC') {
       solverPromises.push(
-        AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.5, undefined, solverTools, solverToolHandler),
-        AiClient.executeWithFallback(solverMessages, solverSchema, 'solver_response', userId, 'solver', 0.7, undefined, solverTools, solverToolHandler)
+        AiClient.executeWithFallback(
+          solverMessages,
+          solverSchema,
+          'solver_response',
+          userId,
+          'solver',
+          0.5,
+          undefined,
+          solverTools,
+          solverToolHandler,
+          token,
+          abortSignal
+        ),
+        AiClient.executeWithFallback(
+          solverMessages,
+          solverSchema,
+          'solver_response',
+          userId,
+          'solver',
+          0.7,
+          undefined,
+          solverTools,
+          solverToolHandler,
+          token,
+          abortSignal
+        ),
       );
     }
 
     const solverResults = await Promise.all(solverPromises);
     const solverDataPrimary = solverResults[0];
     let solverData = solverDataPrimary;
-    
+
     let samplesDisagree = false;
-    
+
     if (intent === 'HARD_ACADEMIC' && solverResults.length === 3) {
       const eq1 = solverResults[0].finalEquation || '';
       const eq2 = solverResults[1].finalEquation || '';
@@ -236,9 +351,14 @@ export class AiSolverCritic {
         const primaryClient = AiClient.getPrimaryClient();
         const compareRes = await primaryClient.chat.completions.create({
           model: config.primaryAiModel,
-          messages: [{ role: 'system', content: `Are these mathematical answers fundamentally equivalent? Answer ONLY "YES" or "NO".\n\nAnswer 1: ${eq1}\nAnswer 2: ${eq2}\nAnswer 3: ${eq3}` }],
+          messages: [
+            {
+              role: 'system',
+              content: `Are these mathematical answers fundamentally equivalent? Answer ONLY "YES" or "NO".\n\nAnswer 1: ${eq1}\nAnswer 2: ${eq2}\nAnswer 3: ${eq3}`,
+            },
+          ],
           max_tokens: 5,
-          temperature: 0.1
+          temperature: 0.1,
         });
         if (compareRes.choices[0]?.message?.content?.trim().toUpperCase().includes('NO')) {
           samplesDisagree = true;
@@ -248,16 +368,26 @@ export class AiSolverCritic {
         samplesDisagree = !(clean(eq1) === clean(eq2) && clean(eq2) === clean(eq3));
       }
 
-      logger.info(`[AI Engine] Primary derivation (T=0.3) shown to student. Consensus check: ${samplesDisagree ? 'DISAGREED' : 'AGREED'}. Eq1: ${eq1}, Eq2: ${eq2}, Eq3: ${eq3}`);
-      
+      logger.info(
+        `[AI Engine] Primary derivation (T=0.3) shown to student. Consensus check: ${samplesDisagree ? 'DISAGREED' : 'AGREED'}. Eq1: ${eq1}, Eq2: ${eq2}, Eq3: ${eq3}`,
+      );
+
       if (samplesDisagree) {
-        logger.warn(`[AI Engine] Solvers disagreed! Spawning Debate Synthesizer Agent to resolve conflict.`);
+        logger.warn(
+          `[AI Engine] Solvers disagreed! Spawning Debate Synthesizer Agent to resolve conflict.`,
+        );
         try {
           const debateMessages = [
-            { role: 'system', content: `You are the Debate Synthesizer Agent. Three different AI solvers attempted this problem and got conflicting final equations. Analyze their step-by-step logic, identify who made the mathematical or conceptual error, and output the ultimate, correct final solution.` },
-            { role: 'user', content: `Question: ${query}\n\nSolver 1 (T=0.3):\n${JSON.stringify(solverResults[0])}\n\nSolver 2 (T=0.5):\n${JSON.stringify(solverResults[1])}\n\nSolver 3 (T=0.7):\n${JSON.stringify(solverResults[2])}` }
+            {
+              role: 'system',
+              content: `You are the Debate Synthesizer Agent. Three different AI solvers attempted this problem and got conflicting final equations. Analyze their step-by-step logic, identify who made the mathematical or conceptual error, and output the ultimate, correct final solution.`,
+            },
+            {
+              role: 'user',
+              content: `Question: ${query}\n\nSolver 1 (T=0.3):\n${JSON.stringify(solverResults[0])}\n\nSolver 2 (T=0.5):\n${JSON.stringify(solverResults[1])}\n\nSolver 3 (T=0.7):\n${JSON.stringify(solverResults[2])}`,
+            },
           ];
-          
+
           const debateData = await AiClient.executeWithFallback(
             debateMessages,
             solverSchema,
@@ -267,22 +397,30 @@ export class AiSolverCritic {
             0.1,
             undefined,
             solverTools,
-            solverToolHandler
+            solverToolHandler,
+            token,
+            abortSignal
           );
-          
+
           if (debateData.steps && debateData.finalEquation) {
-             logger.info(`[AI Engine] Debate Agent successfully synthesized a consensus derivation.`);
-             solverData = { ...solverData, ...debateData };
-             solverData.pipelineLog = solverData.pipelineLog || {};
-             solverData.pipelineLog.debateAgentResolved = true;
+            logger.info(
+              `[AI Engine] Debate Agent successfully synthesized a consensus derivation.`,
+            );
+            solverData = { ...solverData, ...debateData };
+            solverData.pipelineLog = solverData.pipelineLog || {};
+            solverData.pipelineLog.debateAgentResolved = true;
           }
         } catch (e) {
-          logger.error(`[AI Engine] Debate Agent failed to synthesize. Falling back to primary solver output.`, e);
+          logger.error(
+            `[AI Engine] Debate Agent failed to synthesize. Falling back to primary solver output.`,
+            e,
+          );
         }
       }
-
     } else {
-      logger.info(`[AI Engine] EASY_ACADEMIC intent detected. Skipped 3-solver consensus to save latency.`);
+      logger.info(
+        `[AI Engine] EASY_ACADEMIC intent detected. Skipped 3-solver consensus to save latency.`,
+      );
     }
 
     if (onEvent) {
@@ -303,8 +441,8 @@ Question: "${query || 'Solve the problem in the image.'}"
 
 Solver Derivation:
 ${JSON.stringify(solverData.steps, null, 2)}
-${samplesDisagree && !solverData.pipelineLog?.debateAgentResolved ? "\nWARNING: Multiple independent solver runs produced conflicting final equations, and the Debate Agent failed. Audit this derivation with EXTREME skepticism. The confidence score should likely be lowered." : ""}
-${samplesDisagree && solverData.pipelineLog?.debateAgentResolved ? "\nNOTE: Solvers initially disagreed, but a Debate Synthesizer resolved the logic. Audit the synthesized steps carefully." : ""}
+${samplesDisagree && !solverData.pipelineLog?.debateAgentResolved ? '\nWARNING: Multiple independent solver runs produced conflicting final equations, and the Debate Agent failed. Audit this derivation with EXTREME skepticism. The confidence score should likely be lowered.' : ''}
+${samplesDisagree && solverData.pipelineLog?.debateAgentResolved ? '\nNOTE: Solvers initially disagreed, but a Debate Synthesizer resolved the logic. Audit the synthesized steps carefully.' : ''}
 
 CRITICAL RULES FOR AUDIT:
 1. Dimensional Analysis: Explicitly check units/dimensions of the final equation.
@@ -316,8 +454,16 @@ CRITICAL RULES FOR AUDIT:
 - Mark unverified steps clearly with verified = false and provide criticFeedback.`;
 
     const criticMessages: any[] = [
-      { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.` },
-      { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================` },
+      {
+        role: 'system',
+        content:
+          MASTER_SYSTEM_PROMPT +
+          `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}\n\nIMPORTANT: YOU MUST OUTPUT STRICTLY VALID JSON. DO NOT WRAP YOUR RESPONSE IN MARKDOWN BLOCK QUOTES (e.g. \`\`\`json). OUTPUT ONLY THE RAW JSON OBJECT.`,
+      },
+      {
+        role: 'system',
+        content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================`,
+      },
       ...recentHistory,
     ];
 
@@ -326,19 +472,18 @@ CRITICAL RULES FOR AUDIT:
         role: 'user',
         content: [
           { type: 'text', text: criticPromptText },
-          { type: 'image_url', image_url: { url: imageUrl } }
-        ]
+          { type: 'image_url', image_url: { url: imageUrl } },
+        ],
       });
     } else {
       criticMessages.push({ role: 'user', content: criticPromptText });
     }
 
-    
     const criticSchema = getCriticSchema();
     const criticTools = getCriticTools(evaluateExpression);
 
     const criticToolHandler = async (name: string, args: any) => {
-      if (name === "evaluate_expression") {
+      if (name === 'evaluate_expression') {
         try {
           const val = evaluate(args.expression);
           return { result: String(val) };
@@ -346,14 +491,26 @@ CRITICAL RULES FOR AUDIT:
           return { error: e.message };
         }
       }
-      return { error: "Unknown tool" };
+      return { error: 'Unknown tool' };
     };
 
-    const criticData = await AiClient.executeWithFallback(criticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, (token) => {
-      if (onEvent) {
-        onEvent({ type: 'critic_chunk', data: { content: token } });
-      }
-    }, criticTools, criticToolHandler);
+    const criticData = await AiClient.executeWithFallback(
+      criticMessages,
+      criticSchema,
+      'critic_response',
+      userId,
+      'critic',
+      0.1,
+      (token) => {
+        if (onEvent) {
+          onEvent({ type: 'critic_chunk', data: { content: token } });
+        }
+      },
+      criticTools,
+      criticToolHandler,
+      token,
+      abortSignal
+    );
 
     const stepVerdictsMap = new Map();
     if (criticData.stepVerdicts && Array.isArray(criticData.stepVerdicts)) {
@@ -368,7 +525,11 @@ CRITICAL RULES FOR AUDIT:
     }
 
     let finalStatus = 'FLAGGED';
-    if (criticData.criticAuditStatus === 'VERIFIED' && typeof effectiveConfidenceScore === 'number' && effectiveConfidenceScore >= 75) {
+    if (
+      criticData.criticAuditStatus === 'VERIFIED' &&
+      typeof effectiveConfidenceScore === 'number' &&
+      effectiveConfidenceScore >= 75
+    ) {
       finalStatus = 'VERIFIED';
     }
 
@@ -378,11 +539,19 @@ CRITICAL RULES FOR AUDIT:
     if (finalStatus === 'FLAGGED') {
       logger.info(`[AI Engine] Critic flagged the response. Initiating Self-Correction Loop...`);
       const correctionUserText = `Solve the following question strictly using principles relevant to ${subject}.\n\nQuestion: "${query || 'Solve the problem in the image.'}"\n\n=== CRITIC FEEDBACK FROM PREVIOUS ATTEMPT ===\nThe Critic AI rejected your previous derivation for the following reasons:\n${criticData.criticAuditNotes}\nStep-specific feedback:\n${JSON.stringify(criticData.stepVerdicts?.filter((v: any) => !v.verified) || [], null, 2)}\n\nCRITICAL INSTRUCTION: You must rewrite your derivation to address ALL of the Critic's feedback. Do not repeat the same mistakes.`;
-      
+
       const correctionMessages: any[] = [
-        { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}` },
-        { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.` },
-        ...recentHistory
+        {
+          role: 'system',
+          content:
+            MASTER_SYSTEM_PROMPT +
+            `\n\nYou are StudyFlow AI, an intelligent study assistant. Provide a step-by-step derivation without verifying your own work. ${languageInstruction}${masteryContext}`,
+        },
+        {
+          role: 'system',
+          content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================\n\nCRITICAL RULE FOR HONESTY:\n- You MUST ONLY use formulas and concepts found in the Ground Truth Knowledge Base above.`,
+        },
+        ...recentHistory,
       ];
 
       if (imageUrl) {
@@ -390,21 +559,33 @@ CRITICAL RULES FOR AUDIT:
           role: 'user',
           content: [
             { type: 'text', text: correctionUserText },
-            { type: 'image_url', image_url: { url: imageUrl } }
-          ]
+            { type: 'image_url', image_url: { url: imageUrl } },
+          ],
         });
       } else {
         correctionMessages.push({ role: 'user', content: correctionUserText });
       }
 
-      const correctedSolverData = await AiClient.executeWithFallback(correctionMessages, solverSchema, 'solver_response', userId, 'solver', 0.4, (token) => {
-        if (onEvent) {
-          onEvent({ type: 'solver_chunk', data: { content: token, isCorrection: true } });
-        }
-      });
-      
+      const correctedSolverData = await AiClient.executeWithFallback(
+        correctionMessages,
+        solverSchema,
+        'solver_response',
+        userId,
+        'solver',
+        0.4,
+        (token) => {
+          if (onEvent) {
+            onEvent({ type: 'solver_chunk', data: { content: token, isCorrection: true } });
+          }
+        },
+        undefined,
+        undefined,
+        token,
+        abortSignal
+      );
+
       if (onEvent) {
-         onEvent({ type: 'solver_draft', data: correctedSolverData });
+        onEvent({ type: 'solver_draft', data: correctedSolverData });
       }
 
       const reCriticUserText = `Fact-check the following CORRECTED Solver AI's derivation line-by-line against standard academic curriculum and the ground truth.
@@ -424,9 +605,17 @@ CRITICAL RULES FOR AUDIT:
 - Mark unverified steps clearly with verified = false and provide criticFeedback.`;
 
       const reCriticMessages: any[] = [
-        { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}` },
-        { role: 'system', content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================` },
-        ...recentHistory
+        {
+          role: 'system',
+          content:
+            MASTER_SYSTEM_PROMPT +
+            `\n\nYou are the StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases. You have NEVER seen this derivation before and must audit it skeptically step by step.\n\n${languageInstruction}`,
+        },
+        {
+          role: 'system',
+          content: `=== NCERT GROUND TRUTH KNOWLEDGE BASE ===\n${ncertContext}\n=========================================`,
+        },
+        ...recentHistory,
       ];
 
       if (imageUrl) {
@@ -434,34 +623,49 @@ CRITICAL RULES FOR AUDIT:
           role: 'user',
           content: [
             { type: 'text', text: reCriticUserText },
-            { type: 'image_url', image_url: { url: imageUrl } }
-          ]
+            { type: 'image_url', image_url: { url: imageUrl } },
+          ],
         });
       } else {
         reCriticMessages.push({ role: 'user', content: reCriticUserText });
       }
 
+      const reCriticData = await AiClient.executeWithFallback(
+        reCriticMessages,
+        criticSchema,
+        'critic_response',
+        userId,
+        'critic',
+        0.1,
+        (token) => {
+          if (onEvent) {
+            onEvent({ type: 'critic_chunk', data: { content: token, isCorrection: true } });
+          }
+        },
+        criticTools,
+        criticToolHandler,
+        token,
+        abortSignal
+      );
 
-      const reCriticData = await AiClient.executeWithFallback(reCriticMessages, criticSchema, 'critic_response', userId, 'critic', 0.1, (token) => {
-        if (onEvent) {
-          onEvent({ type: 'critic_chunk', data: { content: token, isCorrection: true } });
-        }
-      }, criticTools, criticToolHandler);
-      
       finalSolverData = correctedSolverData;
       finalCriticData = reCriticData;
-      
+
       let reEffectiveConfidenceScore = reCriticData.confidenceScore;
       if (samplesDisagree && typeof reEffectiveConfidenceScore === 'number') {
         reEffectiveConfidenceScore = Math.min(reEffectiveConfidenceScore, 60);
       }
 
-      if (reCriticData.criticAuditStatus === 'VERIFIED' && typeof reEffectiveConfidenceScore === 'number' && reEffectiveConfidenceScore >= 75) {
+      if (
+        reCriticData.criticAuditStatus === 'VERIFIED' &&
+        typeof reEffectiveConfidenceScore === 'number' &&
+        reEffectiveConfidenceScore >= 75
+      ) {
         finalStatus = 'VERIFIED';
       } else {
         finalStatus = 'FLAGGED';
       }
-      
+
       const reStepVerdictsMap = new Map();
       if (reCriticData.stepVerdicts && Array.isArray(reCriticData.stepVerdicts)) {
         for (const v of reCriticData.stepVerdicts) {
@@ -471,22 +675,28 @@ CRITICAL RULES FOR AUDIT:
 
       if (finalSolverData.steps && Array.isArray(finalSolverData.steps)) {
         finalSolverData.steps = finalSolverData.steps.map((step: any) => {
-          const verdict = reStepVerdictsMap.get(step.stepNumber) || { verified: true, criticFeedback: '' };
+          const verdict = reStepVerdictsMap.get(step.stepNumber) || {
+            verified: true,
+            criticFeedback: '',
+          };
           return {
             ...step,
             verified: verdict.verified,
-            criticFeedback: verdict.criticFeedback
+            criticFeedback: verdict.criticFeedback,
           };
         });
       }
     } else {
       if (finalSolverData.steps && Array.isArray(finalSolverData.steps)) {
         finalSolverData.steps = finalSolverData.steps.map((step: any) => {
-          const verdict = stepVerdictsMap.get(step.stepNumber) || { verified: true, criticFeedback: '' };
+          const verdict = stepVerdictsMap.get(step.stepNumber) || {
+            verified: true,
+            criticFeedback: '',
+          };
           return {
             ...step,
             verified: verdict.verified,
-            criticFeedback: verdict.criticFeedback
+            criticFeedback: verdict.criticFeedback,
           };
         });
       }
@@ -501,8 +711,8 @@ CRITICAL RULES FOR AUDIT:
       stepVerdicts: finalCriticData.stepVerdicts,
       pipelineLog: {
         ...(finalSolverData.pipelineLog || {}),
-        ...(finalCriticData.pipelineLog || {})
-      }
+        ...(finalCriticData.pipelineLog || {}),
+      },
     };
 
     if (finalStatus === 'FLAGGED') {
@@ -512,12 +722,19 @@ CRITICAL RULES FOR AUDIT:
         const interventionRes = await primaryClient.chat.completions.create({
           model: config.primaryAiModel,
           messages: [
-            { role: 'system', content: 'You are an educational Intervention Agent. The student failed to understand a concept or asked a flawed question. Based on the critic notes, generate a 2-question multiple-choice micro-quiz to test their core understanding before they can proceed. Output ONLY valid JSON matching this schema: { "interventions": [ { "question": "string", "options": ["string", "string", "string", "string"], "correctIndex": number, "explanation": "string" } ] }' },
-            { role: 'user', content: `Topic: ${subject}\nQuestion: ${query}\nCritic Notes: ${finalCriticData.criticAuditNotes}` }
+            {
+              role: 'system',
+              content:
+                'You are an educational Intervention Agent. The student failed to understand a concept or asked a flawed question. Based on the critic notes, generate a 2-question multiple-choice micro-quiz to test their core understanding before they can proceed. Output ONLY valid JSON matching this schema: { "interventions": [ { "question": "string", "options": ["string", "string", "string", "string"], "correctIndex": number, "explanation": "string" } ] }',
+            },
+            {
+              role: 'user',
+              content: `Topic: ${subject}\nQuestion: ${query}\nCritic Notes: ${finalCriticData.criticAuditNotes}`,
+            },
           ],
-          response_format: { type: 'json_object' }
+          response_format: { type: 'json_object' },
         });
-        
+
         const interventionData = JSON.parse(interventionRes.choices[0].message.content || '{}');
         finalResponse.intervention = interventionData.interventions || null;
       } catch (err) {
@@ -532,7 +749,7 @@ CRITICAL RULES FOR AUDIT:
     }
 
     appCache.set(cacheKey, finalResponse, 3600 * 24);
-    
+
     if (queryEmbedding) {
       let semanticCount = 0;
       let oldestKey = '';
@@ -553,12 +770,16 @@ CRITICAL RULES FOR AUDIT:
       }
 
       const semanticKey = `semanticCache_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-      appCache.set(semanticKey, {
-        subject,
-        language,
-        embedding: queryEmbedding,
-        response: finalResponse
-      }, 3600 * 24);
+      appCache.set(
+        semanticKey,
+        {
+          subject,
+          language,
+          embedding: queryEmbedding,
+          response: finalResponse,
+        },
+        3600 * 24,
+      );
     }
 
     return finalResponse;

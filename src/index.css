@@ -1,27 +1,48 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..800&display=swap');
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family:
+      'Plus Jakarta Sans',
+      system-ui,
+      -apple-system,
+      sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  html, body {
+  html,
+  body {
     @apply bg-zinc-50 text-zinc-900 dark:bg-[#0A0A0B] dark:text-zinc-200;
   }
 
-  html.dark ::-webkit-scrollbar { width: 6px; height: 6px; }
-  html.dark ::-webkit-scrollbar-track { background: transparent; }
-  html.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 999px; }
+  html.dark ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  html.dark ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  html.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+  }
 
-  html:not(.dark) ::-webkit-scrollbar { width: 6px; height: 6px; }
-  html:not(.dark) ::-webkit-scrollbar-track { background: transparent; }
-  html:not(.dark) ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 999px; }
+  html:not(.dark) ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  html:not(.dark) ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  html:not(.dark) ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 999px;
+  }
 }
 
 /* Smooth transition */
@@ -31,14 +52,20 @@
 
 /* Premium Hover States */
 .hover-lift {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .hover-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.1),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1);
 }
 html.dark .hover-lift:hover {
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.5),
+    0 8px 10px -6px rgba(0, 0, 0, 0.5);
 }
 
 .hover-glow {
@@ -53,8 +80,12 @@ html.dark .hover-glow:hover {
 
 /* Animations */
 @keyframes shimmer {
-  0% { transform: translateX(-150%); }
-  100% { transform: translateX(150%); }
+  0% {
+    transform: translateX(-150%);
+  }
+  100% {
+    transform: translateX(150%);
+  }
 }
 
 /* Math / Code */
@@ -69,8 +100,12 @@ html.dark .hover-glow:hover {
   overflow-x: auto;
   overflow-y: hidden;
 }
-.katex { line-height: 1.5 !important; }
-.prose p, .prose li, .prose blockquote {
+.katex {
+  line-height: 1.5 !important;
+}
+.prose p,
+.prose li,
+.prose blockquote {
   line-height: 2 !important;
   margin-top: 1em !important;
   margin-bottom: 1em !important;
@@ -81,12 +116,70 @@ html.dark .hover-glow:hover {
 }
 
 /* Legacy aliases — keep them minimal, no dark mode logic here */
-.bg-neo { @apply bg-white dark:bg-[#0A0A0B]; }
-.bg-neo-convex { @apply bg-white/60 dark:bg-zinc-900/80 backdrop-blur-2xl border border-zinc-200 dark:border-zinc-800; }
-.bg-neo-concave { @apply bg-zinc-50 dark:bg-[#0A0A0B] border border-zinc-200 dark:border-zinc-800; }
-.bg-grid-pattern { background: none; }
-.text-neo { @apply text-zinc-900 dark:text-zinc-200; }
-.shadow-neo { @apply border border-zinc-200 dark:border-zinc-800; transition: all 0.4s cubic-bezier(0.22,1,0.36,1); }
-.shadow-neo-accent { @apply border border-blue-500/40; transition: all 0.4s cubic-bezier(0.22,1,0.36,1); }
-.shadow-neo-sm { @apply border border-zinc-200 dark:border-zinc-800; transition: all 0.4s cubic-bezier(0.22,1,0.36,1); }
-.shadow-neo-inner { @apply bg-zinc-100/50 dark:bg-black/40 border border-zinc-200 dark:border-zinc-800; transition: all 0.4s cubic-bezier(0.22,1,0.36,1); }
+.bg-neo {
+  @apply bg-white dark:bg-[#0A0A0B];
+}
+.bg-neo-convex {
+  @apply bg-white/60 dark:bg-zinc-900/80 backdrop-blur-2xl border border-zinc-200 dark:border-zinc-800;
+}
+.bg-neo-concave {
+  @apply bg-zinc-50 dark:bg-[#0A0A0B] border border-zinc-200 dark:border-zinc-800;
+}
+.bg-grid-pattern {
+  background: none;
+}
+.text-neo {
+  @apply text-zinc-900 dark:text-zinc-200;
+}
+.shadow-neo {
+  @apply border border-zinc-200 dark:border-zinc-800;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shadow-neo-accent {
+  @apply border border-blue-500/40;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shadow-neo-sm {
+  @apply border border-zinc-200 dark:border-zinc-800;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shadow-neo-inner {
+  @apply bg-zinc-100/50 dark:bg-black/40 border border-zinc-200 dark:border-zinc-800;
+  transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@theme {
+  --color-precision-cobalt: #2563eb;
+  --color-obsidian-canvas: #09090b;
+  --color-charcoal-ink: #18181b;
+  --color-muted-steel: #71717a;
+  --color-pure-surface: #ffffff;
+  --color-shadow-border: rgba(255, 255, 255, 0.05);
+  --color-outline-variant: rgba(226, 232, 240, 0.5);
+
+  --color-inverse-on-surface: #ffffff;
+  --color-on-surface: #18181b;
+  --color-on-surface-variant: #71717a;
+  --color-surface-container: #18181b;
+  --color-surface-container-low: #f9fafb;
+  --color-primary: #2563eb;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #2563eb;
+
+  --font-display-hero: 'Outfit', sans-serif;
+  --font-headline-lg: 'Outfit', sans-serif;
+  --font-headline-md: 'Outfit', sans-serif;
+  --font-headline-sm: 'Outfit', sans-serif;
+  --font-body-lg: 'Plus Jakarta Sans', sans-serif;
+  --font-body-md: 'Plus Jakarta Sans', sans-serif;
+  --font-body-sm: 'Plus Jakarta Sans', sans-serif;
+  --font-mono-data: 'JetBrains Mono', monospace;
+  --font-label: 'JetBrains Mono', monospace;
+
+  --spacing-space-xs: 0.5rem;
+  --spacing-space-sm: 1rem;
+  --spacing-space-md: 1.5rem;
+  --spacing-space-lg: 2rem;
+  --spacing-space-xl: 3rem;
+  --spacing-space-2xl: 4rem;
+  --spacing-gutter: 2rem;
+}

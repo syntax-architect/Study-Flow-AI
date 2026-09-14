@@ -60,18 +60,29 @@ describe('generateSolverCritic Pipeline Orchestration', () => {
     mockCreate.mockImplementation((args: any) => {
       const messagesStr = JSON.stringify(args.messages);
       
+      const createMockResponse = (content: string) => {
+        if (args.stream) {
+          return Promise.resolve({
+            [Symbol.asyncIterator]: async function* () {
+              yield { choices: [{ delta: { content: content } }] };
+            }
+          });
+        }
+        return Promise.resolve({ choices: [{ message: { content } }] });
+      };
+
       if (messagesStr.includes('strict router')) {
-        return Promise.resolve({ choices: [{ message: { content: overrides.intent || 'HARD_ACADEMIC' } }] });
+        return createMockResponse(overrides.intent || 'HARD_ACADEMIC');
       }
       if (messagesStr.includes('expert search query generator')) {
-        return Promise.resolve({ choices: [{ message: { content: JSON.stringify({ queries: ['test'] }) } }] });
+        return createMockResponse(JSON.stringify({ queries: ['test'] }));
       }
       if (messagesStr.includes('strict relevance judge')) {
-        return Promise.resolve({ choices: [{ message: { content: JSON.stringify({ scoredExcerpts: [{ excerptIndex: 0, score: 9 }] }) } }] });
+        return createMockResponse(JSON.stringify({ scoredExcerpts: [{ excerptIndex: 0, score: 9 }] }));
       }
       if (messagesStr.includes('Are these mathematical answers fundamentally equivalent')) {
         console.log("CONSENSUS CALLED WITH:", messagesStr);
-        return Promise.resolve({ choices: [{ message: { content: overrides.consensus || 'YES' } }] });
+        return createMockResponse(overrides.consensus || 'YES');
       }
       if (messagesStr.includes('StudyFlow AI Critic Auditor')) {
         console.log("CRITIC CALLED");
@@ -82,13 +93,13 @@ describe('generateSolverCritic Pipeline Orchestration', () => {
           criticAuditNotes: 'Looks good',
           stepVerdicts: [{ stepNumber: 1, verified: true }]
         };
-        return Promise.resolve({ choices: [{ message: { content: JSON.stringify(overrides.critic || defaultCritic) } }] });
+        return createMockResponse(JSON.stringify(overrides.critic || defaultCritic));
       }
       if (messagesStr.includes('Intervention Agent')) {
         const intervention = {
           interventions: [{ question: "Q", options: ["A", "B", "C", "D"], correctIndex: 0, explanation: "E" }]
         };
-        return Promise.resolve({ choices: [{ message: { content: JSON.stringify(overrides.intervention || intervention) } }] });
+        return createMockResponse(JSON.stringify(overrides.intervention || intervention));
       }
       
       // Solver
@@ -107,24 +118,10 @@ describe('generateSolverCritic Pipeline Orchestration', () => {
         
         console.log(`SOLVER CALLED ${solverCallCount}, eq=${eq}, stream=${args.stream}`);
 
-        if (args.stream) {
-          return Promise.resolve({
-            [Symbol.asyncIterator]: async function* () {
-              yield { choices: [{ delta: { content: solverResponse } }] };
-            }
-          });
-        } else {
-          return Promise.resolve({
-            choices: [{
-              message: {
-                content: solverResponse
-              }
-            }]
-          });
-        }
+        return createMockResponse(solverResponse);
       }
       
-      return Promise.resolve({ choices: [{ message: { content: '{}' } }] });
+      return createMockResponse('{}');
     });
   };
 

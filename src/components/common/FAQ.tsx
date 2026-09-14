@@ -21,19 +21,19 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, answer, isOpen, onClick }) 
         </span>
         <m.div
           animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
+          transition={{ duration: 0.2, ease: 'easeInOut' }}
         >
           <ChevronDown className="w-5 h-5 text-zinc-500" />
         </m.div>
       </button>
-      
+
       <AnimatePresence initial={false}>
         {isOpen && (
           <m.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
+            transition={{ duration: 0.3, ease: 'easeInOut' }}
             className="overflow-hidden"
           >
             <div className="pb-4 px-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">

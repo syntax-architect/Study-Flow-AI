@@ -10,7 +10,8 @@ interface SEOProps {
 export const SEO: React.FC<SEOProps> = ({ title, description, canonicalUrl }) => {
   const siteTitle = 'StudyFlow AI';
   const fullTitle = title ? `${title} | ${siteTitle}` : siteTitle;
-  const defaultDescription = 'StudyFlow AI - The intelligent learning assistant designed to guide you from basic concepts to advanced derivations seamlessly.';
+  const defaultDescription =
+    'StudyFlow AI - The intelligent learning assistant designed to guide you from basic concepts to advanced derivations seamlessly.';
 
   return (
     <Helmet>

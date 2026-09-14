@@ -32,9 +32,11 @@ export const TrustDashboardView: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#0A0A0B] text-zinc-900 dark:text-zinc-100 p-8 flex flex-col items-center justify-center">
-      <SEO title="Trust Dashboard" description="Live telemetry of our Dual-AI Fact-Checking system." />
+      <SEO
+        title="Trust Dashboard"
+        description="Live telemetry of our Dual-AI Fact-Checking system."
+      />
       <div className="max-w-4xl w-full">
-        
         {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-500/10 text-blue-500 mb-6">
@@ -44,7 +46,8 @@ export const TrustDashboardView: React.FC = () => {
             AI Trust & Transparency
           </h1>
           <p className="text-lg text-zinc-600 dark:text-zinc-400 max-w-2xl mx-auto">
-            Live metrics from our Dual-Engine AI architecture, ensuring every answer is verified against standard curriculum.
+            Live metrics from our Dual-Engine AI architecture, ensuring every answer is verified
+            against standard curriculum.
           </p>
         </div>
 
@@ -64,38 +67,39 @@ export const TrustDashboardView: React.FC = () => {
         {/* Stats Grid */}
         {!loading && stats && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
             <div className="bg-white dark:bg-[#111113] border border-zinc-200 dark:border-white/10 rounded-2xl p-6 shadow-sm flex flex-col items-center text-center transform transition-transform hover:scale-105">
               <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-4">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">Verified Accuracy</h3>
+              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+                Verified Accuracy
+              </h3>
               <div className="text-4xl font-bold text-zinc-900 dark:text-zinc-50">
                 {stats.overallVerifiedRate.toFixed(1)}%
               </div>
-              <p className="text-xs text-zinc-500 mt-2">
-                Answers verified correct by Critic AI
-              </p>
+              <p className="text-xs text-zinc-500 mt-2">Answers verified correct by Critic AI</p>
             </div>
 
             <div className="bg-white dark:bg-[#111113] border border-zinc-200 dark:border-white/10 rounded-2xl p-6 shadow-sm flex flex-col items-center text-center transform transition-transform hover:scale-105">
               <div className="w-12 h-12 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center mb-4">
                 <Activity className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">Questions Tested</h3>
+              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+                Questions Tested
+              </h3>
               <div className="text-4xl font-bold text-zinc-900 dark:text-zinc-50">
                 {stats.totalQueries.toLocaleString()}
               </div>
-              <p className="text-xs text-zinc-500 mt-2">
-                Total queries evaluated in real-time
-              </p>
+              <p className="text-xs text-zinc-500 mt-2">Total queries evaluated in real-time</p>
             </div>
 
             <div className="bg-white dark:bg-[#111113] border border-zinc-200 dark:border-white/10 rounded-2xl p-6 shadow-sm flex flex-col items-center text-center transform transition-transform hover:scale-105">
               <div className="w-12 h-12 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mb-4">
                 <AlertTriangle className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">Critic Interventions</h3>
+              <h3 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-2">
+                Critic Interventions
+              </h3>
               <div className="text-4xl font-bold text-zinc-900 dark:text-zinc-50">
                 {stats.criticCaughtErrors.toLocaleString()}
               </div>
@@ -103,7 +107,6 @@ export const TrustDashboardView: React.FC = () => {
                 Hallucinations/Errors caught before serving
               </p>
             </div>
-
           </div>
         )}
       </div>

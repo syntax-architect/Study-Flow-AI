@@ -17,7 +17,7 @@ export class AiContext {
         match_threshold: 0.3,
         match_count: 3,
         filter_subject: filter?.subject || null,
-        filter_chapter: filter?.chapter || null
+        filter_chapter: filter?.chapter || null,
       });
 
       if (error) throw error;
@@ -39,7 +39,7 @@ export class AiContext {
         match_threshold: 0.3,
         match_count: 5,
         filter_subject: filter?.subject || null,
-        filter_chapter: filter?.chapter || null
+        filter_chapter: filter?.chapter || null,
       });
 
       if (error) throw error;
@@ -50,7 +50,13 @@ export class AiContext {
     }
   }
 
-  static async advancedRetrieveContext(query: string, historyText: string, filter?: { subject?: string; chapter?: string }, userId?: string, token?: string) {
+  static async advancedRetrieveContext(
+    query: string,
+    historyText: string,
+    filter?: { subject?: string; chapter?: string },
+    userId?: string,
+    token?: string,
+  ) {
     try {
       const expansionPrompt = `Given the user's latest question and chat history, generate 3 distinct search queries to find the most relevant information in a textbook.
 1. The first query should be the core conceptual question.
@@ -67,21 +73,27 @@ Latest Question: ${query}`;
 
       const expansionRes = await AiClient.executeWithFallback(
         [
-          { role: 'system', content: "You are an expert search query generator for a physics/math RAG pipeline." },
-          { role: 'user', content: expansionPrompt }
+          {
+            role: 'system',
+            content: 'You are an expert search query generator for a physics/math RAG pipeline.',
+          },
+          { role: 'user', content: expansionPrompt },
         ],
-        expansionSchema, 
-        "query_expansion", 
-        userId, 
-        "rag_expansion", 
+        expansionSchema,
+        'query_expansion',
+        userId,
+        'rag_expansion',
         0.2,
         undefined,
         undefined,
         undefined,
-        token
+        token,
       );
 
-      const queries = expansionRes.queries && Array.isArray(expansionRes.queries) ? expansionRes.queries : [query];
+      const queries =
+        expansionRes.queries && Array.isArray(expansionRes.queries)
+          ? expansionRes.queries
+          : [query];
       if (!queries.includes(query)) queries.push(query);
 
       logger.debug(`[AI Engine] RAG Multi-Query Expansion generated:`, queries);
@@ -89,7 +101,7 @@ Latest Question: ${query}`;
       const retrievalPromises = queries.map((q: string) => this.retrieveContextRaw(q, filter));
       const resultsArray = await Promise.all(retrievalPromises);
 
-      const rrfScores = new Map<string, { content: string, score: number }>();
+      const rrfScores = new Map<string, { content: string; score: number }>();
       const k = 60;
 
       resultsArray.forEach((results) => {
@@ -124,18 +136,22 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
 
       const rerankRes = await AiClient.executeWithFallback(
         [
-          { role: 'system', content: "You are a strict relevance judge for an academic RAG pipeline. Only highly relevant documents should score above 5." },
-          { role: 'user', content: rerankPrompt }
+          {
+            role: 'system',
+            content:
+              'You are a strict relevance judge for an academic RAG pipeline. Only highly relevant documents should score above 5.',
+          },
+          { role: 'user', content: rerankPrompt },
         ],
         rerankSchema,
-        "context_reranker",
+        'context_reranker',
         userId,
-        "rag_rerank",
+        'rag_rerank',
         0.0,
         undefined,
         undefined,
         undefined,
-        token
+        token,
       );
 
       let finalContexts: string[] = [];
@@ -143,7 +159,7 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         const sorted = rerankRes.scoredExcerpts
           .filter((item: any) => item.score >= 5)
           .sort((a: any, b: any) => b.score - a.score);
-        
+
         sorted.forEach((item: any) => {
           if (topDocs[item.excerptIndex]) {
             finalContexts.push(topDocs[item.excerptIndex].content);
@@ -152,13 +168,16 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
       }
 
       if (finalContexts.length === 0) {
-        logger.info(`[AI Engine] RAG Re-ranker filtered out all documents or failed. Falling back to top RRF result.`);
+        logger.info(
+          `[AI Engine] RAG Re-ranker filtered out all documents or failed. Falling back to top RRF result.`,
+        );
         finalContexts = [topDocs[0].content];
       }
 
-      logger.info(`[AI Engine] Advanced RAG Pipeline completed. Yielded ${finalContexts.length} highly relevant chunks.`);
+      logger.info(
+        `[AI Engine] Advanced RAG Pipeline completed. Yielded ${finalContexts.length} highly relevant chunks.`,
+      );
       return finalContexts.join('\n\n');
-
     } catch (err) {
       logger.error('[AI Engine] Advanced RAG Pipeline Error:', err);
       return this.retrieveContext(query, filter);
@@ -167,25 +186,25 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
 
   static async fetchUserMasteryContext(userId?: string): Promise<string> {
     if (!userId) return '';
-    
+
     const cacheKey = `userMastery_${userId}`;
     const cached = appCache.get<string>(cacheKey);
-    if (cached !== undefined) {
+    if (typeof cached === 'string') {
       return cached;
     }
-    
+
     try {
       const { data, error } = await supabase
         .from('user_topic_mastery')
         .select('*')
         .eq('user_id', userId);
-        
+
       if (error || !data || data.length === 0) {
         appCache.set(cacheKey, '', 900); // 15 mins
         return '';
       }
 
-      const struggledTopics = data.filter(t => {
+      const struggledTopics = data.filter((t) => {
         const total = t.verified_count + t.flagged_count;
         if (total === 0) return false;
         const score = t.verified_count / total;
@@ -197,9 +216,12 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         return '';
       }
 
-      const topicSummaries = struggledTopics.map(t => 
-        `- ${t.topic_title} (${t.verified_count}/${t.verified_count + t.flagged_count} verified)`
-      ).join('\n');
+      const topicSummaries = struggledTopics
+        .map(
+          (t) =>
+            `- ${t.topic_title} (${t.verified_count}/${t.verified_count + t.flagged_count} verified)`,
+        )
+        .join('\n');
 
       const result = `\n\n=== STUDENT ADAPTIVITY PROFILE ===\nThis student has previously struggled with the following topics:\n${topicSummaries}\n\nIf the current question relates to any of these topics, you MUST explain foundational steps extremely explicitly rather than assuming mastery. Do not skip any mathematical or conceptual steps for these areas.`;
       appCache.set(cacheKey, result, 900);
@@ -212,14 +234,14 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
 
   static async retrieveUserMemory(userId: string, query: string, token?: string) {
     if (!userId) return '';
-    
+
     const queryHash = Buffer.from(query).toString('base64').substring(0, 30);
     const cacheKey = `userMemory_${userId}_${queryHash}`;
     const cached = appCache.get<string>(cacheKey);
     if (cached !== undefined) {
       return cached;
     }
-    
+
     try {
       const extractor = await getExtractor();
       const output = await extractor(query, { pooling: 'mean', normalize: true });
@@ -230,7 +252,7 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         p_user_id: userId,
         query_embedding,
         match_threshold: 0.2, // lower threshold to catch subtle insights
-        match_count: 3
+        match_count: 3,
       });
 
       if (error) throw error;
@@ -238,7 +260,7 @@ ${topDocs.map((doc, idx) => `[Excerpt ${idx}]\n${doc.content}\n`).join('\n')}`;
         appCache.set(cacheKey, '', 3600); // cache misses for 1 hour
         return '';
       }
-      
+
       const memories = data.map((d: any) => `- ${d.content}`).join('\n');
       const result = `\n[LONG-TERM MEMORY RECALL]\nThe following are insights about the student's learning history (weaknesses, masteries, habits):\n${memories}\n\nUse this context to heavily personalize your Socratic approach. Focus on addressing their known weaknesses.\n`;
       appCache.set(cacheKey, result, 3600);

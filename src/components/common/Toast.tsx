@@ -3,13 +3,17 @@ import { m, AnimatePresence } from 'motion/react';
 import { CheckCircle2, AlertTriangle, Info } from 'lucide-react';
 
 export type ToastType = 'success' | 'warning' | 'info' | 'error';
-export interface ToastMessage { id: string; message: string; type: ToastType; }
+export interface ToastMessage {
+  id: string;
+  message: string;
+  type: ToastType;
+}
 
 export const ToastContainer: React.FC<{ toasts: ToastMessage[] }> = ({ toasts }) => {
   return (
     <div className="fixed top-6 left-0 right-0 z-[100] flex flex-col items-center gap-3 pointer-events-none px-4">
       <AnimatePresence>
-        {toasts.map(toast => (
+        {toasts.map((toast) => (
           <m.div
             key={toast.id}
             initial={{ opacity: 0, y: -20, scale: 0.9 }}
@@ -32,4 +36,4 @@ export const ToastContainer: React.FC<{ toasts: ToastMessage[] }> = ({ toasts })
       </AnimatePresence>
     </div>
   );
-}
+};

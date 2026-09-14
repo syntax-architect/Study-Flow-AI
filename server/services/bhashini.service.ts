@@ -14,7 +14,11 @@ export class BhashiniService {
   }
 
   // Translates text from source language to target language
-  static async translateText(text: string, sourceLang: string, targetLang: string): Promise<string> {
+  static async translateText(
+    text: string,
+    sourceLang: string,
+    targetLang: string,
+  ): Promise<string> {
     if (process.env.BHASHINI_API_KEY) {
       // TODO: Implement actual Bhashini NMT API call here when keys are available.
       // E.g., fetch('https://dhruva-api.bhashini.gov.in/services/inference/pipeline', ...)
@@ -25,9 +29,12 @@ export class BhashiniService {
     const response = await client.chat.completions.create({
       model: config.primaryAiModel || 'gpt-4o',
       messages: [
-        { role: 'system', content: `You are an expert translator. Translate the following text from ${sourceLang} to ${targetLang}. Preserve all formatting, math equations (in $...$ or $$...$$), and markdown. ONLY return the translated text without any conversational filler.` },
-        { role: 'user', content: text }
-      ]
+        {
+          role: 'system',
+          content: `You are an expert translator. Translate the following text from ${sourceLang} to ${targetLang}. Preserve all formatting, math equations (in $...$ or $$...$$), and markdown. ONLY return the translated text without any conversational filler.`,
+        },
+        { role: 'user', content: text },
+      ],
     });
 
     return response.choices[0]?.message?.content || text;
@@ -41,10 +48,10 @@ export class BhashiniService {
 
     // Fallback to OpenAI Whisper
     const client = this.getOpenAIClient();
-    
+
     // Whisper supports 'language' parameter in ISO-639-1 format
     // Map our lang codes if necessary (bhashini uses slightly different sometimes, but en, hi, ta, mr are standard)
-    const whisperLang = sourceLang === 'bn' ? 'bn' : (sourceLang || 'en');
+    const whisperLang = sourceLang === 'bn' ? 'bn' : sourceLang || 'en';
 
     const response = await client.audio.transcriptions.create({
       file: fs.createReadStream(audioFilePath),
@@ -64,7 +71,7 @@ export class BhashiniService {
 
     // Fallback to OpenAI TTS
     const client = this.getOpenAIClient();
-    
+
     // Strip markdown and math for better TTS reading
     const cleanText = text
       .replace(/\\\[(.*?)\\\]/g, ' $1 ') // Block math

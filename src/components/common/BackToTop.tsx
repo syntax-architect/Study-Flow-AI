@@ -10,8 +10,9 @@ export const BackToTop: React.FC = () => {
     const handleScroll = () => {
       // Find the main scrolling container if body isn't scrolling
       const scrollContainer = document.querySelector('main') || window;
-      const scrollY = scrollContainer instanceof Window ? window.scrollY : scrollContainer.scrollTop;
-      
+      const scrollY =
+        scrollContainer instanceof Window ? window.scrollY : scrollContainer.scrollTop;
+
       if (scrollY > 300) {
         setIsVisible(true);
       } else {
@@ -21,7 +22,7 @@ export const BackToTop: React.FC = () => {
 
     const scrollContainer = document.querySelector('main') || window;
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-    
+
     // Initial check
     handleScroll();
 

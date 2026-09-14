@@ -7,8 +7,10 @@ export function executeJavascript(code: string): string {
     const sandbox: Record<string, any> = {
       console: {
         log: (...args: any[]) => {
-          sandbox.output += args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n';
-        }
+          sandbox.output +=
+            args.map((a) => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') +
+            '\n';
+        },
       },
       output: '',
       Math: Math,
@@ -17,10 +19,10 @@ export function executeJavascript(code: string): string {
 
     const context = vm.createContext(sandbox);
     const script = new vm.Script(code);
-    
+
     // Execute with a strict timeout to prevent infinite loops
     script.runInContext(context, { timeout: 2000 });
-    
+
     return sandbox.output.trim() || 'No output. Did you console.log the result?';
   } catch (error: any) {
     logger.warn(`codeSandbox failed to evaluate code. Error: ${error.message}`);

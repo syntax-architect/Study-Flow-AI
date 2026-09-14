@@ -1,155 +1,227 @@
 export const getSolverSchema = () => ({
-  type: "object",
+  type: 'object',
   properties: {
-    title: { type: "string" },
-    summary: { type: "string" },
+    title: { type: 'string' },
+    summary: { type: 'string' },
     steps: {
-      type: "array",
+      type: 'array',
       items: {
-        type: "object",
+        type: 'object',
         properties: {
-          stepNumber: { type: "integer" },
-          title: { type: "string" },
-          description: { type: "string" },
-          mathBlock: { type: ["string", "null"] }
+          stepNumber: { type: 'integer' },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          mathBlock: { type: ['string', 'null'] },
         },
-        required: ["stepNumber", "title", "description", "mathBlock"],
-        additionalProperties: false
-      }
-    },
-    finalEquation: { type: "string" },
-    suggestedFollowUps: { type: "array", items: { type: "string" }, description: "3 short, clickable questions the user can ask next to continue." },
-    explanationComplexity: { type: "string", enum: ["ELI5", "Standard", "Advanced"], description: "The complexity of vocabulary used." },
-    citation: {
-      type: "object",
-      properties: {
-        textbook: { type: "string" },
-        chapter: { type: "string" },
-        notes: { type: "string" },
-        ncertPage: { type: ["string", "null"] }
+        required: ['stepNumber', 'title', 'description', 'mathBlock'],
+        additionalProperties: false,
       },
-      required: ["textbook", "chapter", "notes", "ncertPage"],
-      additionalProperties: false
+    },
+    finalEquation: { type: 'string' },
+    suggestedFollowUps: {
+      type: 'array',
+      items: { type: 'string' },
+      description: '3 short, clickable questions the user can ask next to continue.',
+    },
+    explanationComplexity: {
+      type: 'string',
+      enum: ['ELI5', 'Standard', 'Advanced'],
+      description: 'The complexity of vocabulary used.',
+    },
+    citation: {
+      type: 'object',
+      properties: {
+        textbook: { type: 'string' },
+        chapter: { type: 'string' },
+        notes: { type: 'string' },
+        ncertPage: { type: ['string', 'null'] },
+      },
+      required: ['textbook', 'chapter', 'notes', 'ncertPage'],
+      additionalProperties: false,
     },
     pipelineLog: {
-      type: "object",
+      type: 'object',
       properties: {
-        solverDraftSummary: { type: "string" },
-        ncertSourceMatch: { type: "string" }
+        solverDraftSummary: { type: 'string' },
+        ncertSourceMatch: { type: 'string' },
       },
-      required: ["solverDraftSummary", "ncertSourceMatch"],
-      additionalProperties: false
-    }
+      required: ['solverDraftSummary', 'ncertSourceMatch'],
+      additionalProperties: false,
+    },
+    intervention: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          question: { type: 'string' },
+          options: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Exactly 4 options for the multiple choice question.',
+          },
+          correctIndex: { type: 'integer', description: '0-based index of the correct option.' },
+          explanation: { type: 'string', description: 'Explanation of the correct answer.' },
+        },
+        required: ['question', 'options', 'correctIndex', 'explanation'],
+        additionalProperties: false,
+      },
+      description: 'Optional. Use this to provide interactive multiple-choice practice questions if the user asks for practice questions or to test their knowledge.',
+    },
   },
-  required: ["title", "summary", "steps", "finalEquation", "suggestedFollowUps", "explanationComplexity", "citation", "pipelineLog"],
-  additionalProperties: false
+  required: [
+    'title',
+    'summary',
+    'steps',
+    'finalEquation',
+    'suggestedFollowUps',
+    'explanationComplexity',
+    'citation',
+    'pipelineLog',
+  ],
+  additionalProperties: false,
 });
 
 export const getCriticSchema = () => ({
-  type: "object",
+  type: 'object',
   properties: {
-    criticAuditStatus: { type: "string", enum: ["VERIFIED", "FLAGGED"] },
-    isOutOfScope: { type: "boolean" },
-    newInsights: { type: "array", items: { type: "string" }, description: "Optional. 1-2 sentence insights about the student's conceptual weakness or mastery based on their query. Only output if a clear pattern or gap is spotted." },
-    criticAuditNotes: { type: "string" },
-    confidenceScore: { type: "integer" },
-    studentMastery: { type: "boolean", description: "True if the student finally grasps a hard concept (lightbulb moment)." },
+    criticAuditStatus: { type: 'string', enum: ['VERIFIED', 'FLAGGED'] },
+    isOutOfScope: { type: 'boolean' },
+    newInsights: {
+      type: 'array',
+      items: { type: 'string' },
+      description:
+        "Optional. 1-2 sentence insights about the student's conceptual weakness or mastery based on their query. Only output if a clear pattern or gap is spotted.",
+    },
+    criticAuditNotes: { type: 'string' },
+    confidenceScore: { type: 'integer' },
+    studentMastery: {
+      type: 'boolean',
+      description: 'True if the student finally grasps a hard concept (lightbulb moment).',
+    },
     stepVerdicts: {
-      type: "array",
+      type: 'array',
       items: {
-        type: "object",
+        type: 'object',
         properties: {
-          stepNumber: { type: "integer" },
-          verified: { type: "boolean" },
-          criticFeedback: { type: ["string", "null"] }
+          stepNumber: { type: 'integer' },
+          verified: { type: 'boolean' },
+          criticFeedback: { type: ['string', 'null'] },
         },
-        required: ["stepNumber", "verified", "criticFeedback"],
-        additionalProperties: false
-      }
+        required: ['stepNumber', 'verified', 'criticFeedback'],
+        additionalProperties: false,
+      },
     },
     pipelineLog: {
-      type: "object",
+      type: 'object',
       properties: {
-        criticVerificationPassed: { type: "boolean" },
+        criticVerificationPassed: { type: 'boolean' },
         criticWarnings: {
-          type: "array",
-          items: { type: "string" }
-        }
+          type: 'array',
+          items: { type: 'string' },
+        },
       },
-      required: ["criticVerificationPassed", "criticWarnings"],
-      additionalProperties: false
-    }
+      required: ['criticVerificationPassed', 'criticWarnings'],
+      additionalProperties: false,
+    },
   },
-  required: ["criticAuditStatus", "isOutOfScope", "newInsights", "criticAuditNotes", "confidenceScore", "studentMastery", "stepVerdicts", "pipelineLog"],
-  additionalProperties: false
+  required: [
+    'criticAuditStatus',
+    'isOutOfScope',
+    'newInsights',
+    'criticAuditNotes',
+    'confidenceScore',
+    'studentMastery',
+    'stepVerdicts',
+    'pipelineLog',
+  ],
+  additionalProperties: false,
 });
 
 export const getCriticTools = (evaluateExpression: any) => [
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "evaluate_expression",
-      description: "Evaluate an arithmetic or algebraic expression (e.g. '15 * 42', 'sin(45 deg)'). Returns the mathematical result.",
+      name: 'evaluate_expression',
+      description:
+        "Evaluate an arithmetic or algebraic expression (e.g. '15 * 42', 'sin(45 deg)'). Returns the mathematical result.",
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
-          expression: { type: "string" }
+          expression: { type: 'string' },
         },
-        required: ["expression"],
-        additionalProperties: false
+        required: ['expression'],
+        additionalProperties: false,
       },
-      strict: true
-    }
-  }
+      strict: true,
+    },
+  },
 ];
 
 export const getSolverTools = () => [
   {
-    type: "function",
+    type: 'function',
     function: {
-      name: "execute_javascript",
-      description: "Execute a block of javascript code in a secure sandbox to calculate physics/math simulations or solve equations. Return the result via console.log. Example code: `console.log(15 * 42)`",
+      name: 'evaluate_expression',
+      description:
+        "Evaluate an arithmetic or algebraic expression (e.g. '15 * 42', 'sin(45 deg)'). Returns the mathematical result.",
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
-          code: { type: "string" }
+          expression: { type: 'string' },
         },
-        required: ["code"],
-        additionalProperties: false
+        required: ['expression'],
+        additionalProperties: false,
       },
-      strict: true
-    }
-  }
+      strict: true,
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'execute_python',
+      description:
+        "Execute Python 3 code in a secure sandbox. Useful for complex math, data analysis, or plotting. Use print() to output results. For plots, do NOT save to file, instead use a base64 encoded string or ascii.",
+      parameters: {
+        type: 'object',
+        properties: {
+          code: { type: 'string' },
+        },
+        required: ['code'],
+        additionalProperties: false,
+      },
+      strict: true,
+    },
+  },
 ];
 
 export const getExpansionSchema = () => ({
-  type: "object",
+  type: 'object',
   properties: {
     queries: {
-      type: "array",
-      items: { type: "string" }
-    }
+      type: 'array',
+      items: { type: 'string' },
+    },
   },
-  required: ["queries"],
-  additionalProperties: false
+  required: ['queries'],
+  additionalProperties: false,
 });
 
 export const getRerankSchema = () => ({
-  type: "object",
+  type: 'object',
   properties: {
     scoredExcerpts: {
-      type: "array",
+      type: 'array',
       items: {
-        type: "object",
+        type: 'object',
         properties: {
-          excerptIndex: { type: "integer" },
-          score: { type: "integer" }
+          excerptIndex: { type: 'integer' },
+          score: { type: 'integer' },
         },
-        required: ["excerptIndex", "score"],
-        additionalProperties: false
-      }
-    }
+        required: ['excerptIndex', 'score'],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["scoredExcerpts"],
-  additionalProperties: false
+  required: ['scoredExcerpts'],
+  additionalProperties: false,
 });

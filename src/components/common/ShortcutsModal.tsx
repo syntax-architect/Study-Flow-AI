@@ -59,14 +59,22 @@ export const ShortcutsModal: React.FC = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-2">
               {SHORTCUTS.map((shortcut, i) => (
-                <div key={i} className="flex items-center justify-between p-3 hover:bg-zinc-50 dark:hover:bg-white/5 rounded-xl transition-colors">
-                  <span className="text-sm text-zinc-600 dark:text-zinc-400 font-medium">{shortcut.description}</span>
+                <div
+                  key={i}
+                  className="flex items-center justify-between p-3 hover:bg-zinc-50 dark:hover:bg-white/5 rounded-xl transition-colors"
+                >
+                  <span className="text-sm text-zinc-600 dark:text-zinc-400 font-medium">
+                    {shortcut.description}
+                  </span>
                   <div className="flex items-center gap-1">
                     {shortcut.keys.map((key, j) => (
-                      <kbd key={j} className="px-2 py-1 bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-white/10 rounded-md text-xs font-mono text-zinc-700 dark:text-zinc-300 shadow-sm">
+                      <kbd
+                        key={j}
+                        className="px-2 py-1 bg-zinc-100 dark:bg-white/10 border border-zinc-200 dark:border-white/10 rounded-md text-xs font-mono text-zinc-700 dark:text-zinc-300 shadow-sm"
+                      >
                         {key}
                       </kbd>
                     ))}

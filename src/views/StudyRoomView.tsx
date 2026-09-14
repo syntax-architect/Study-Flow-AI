@@ -36,11 +36,11 @@ export const StudyRoomView: React.FC = () => {
     channel
       .on('presence', { event: 'sync' }, () => {
         const newState = channel.presenceState();
-        const users = Object.values(newState).flatMap(p => p.map((u: any) => u.name));
+        const users = Object.values(newState).flatMap((p) => p.map((u: any) => u.name));
         setParticipants([...new Set(users)] as string[]);
       })
       .on('broadcast', { event: 'message' }, ({ payload }) => {
-        setMessages(prev => [...prev, payload]);
+        setMessages((prev) => [...prev, payload]);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -69,7 +69,7 @@ export const StudyRoomView: React.FC = () => {
     };
 
     setInput('');
-    setMessages(prev => [...prev, newMsg]);
+    setMessages((prev) => [...prev, newMsg]);
 
     if (channelRef.current) {
       channelRef.current.send({
@@ -85,23 +85,23 @@ export const StudyRoomView: React.FC = () => {
   const triggerAIModeration = async (currentMessages: StudyRoomMessage[]) => {
     try {
       const token = await getToken();
-      
-      const currentParticipants = participants.includes('Rahul (Peer)') 
-        ? [...participants, 'Rahul (Peer)'] 
+
+      const currentParticipants = participants.includes('Rahul (Peer)')
+        ? [...participants, 'Rahul (Peer)']
         : participants;
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/ai/moderate`, {
+      const res = await fetch('/api/ai/moderate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           messages: currentMessages,
           currentParticipants,
-        })
+        }),
       });
-      
+
       const data = await res.json();
       if (data.response) {
         const aiMsg: StudyRoomMessage = {
@@ -110,11 +110,11 @@ export const StudyRoomView: React.FC = () => {
           name: 'AI Moderator',
           content: data.response,
           timestamp: new Date().toISOString(),
-          isAI: true
+          isAI: true,
         };
-        
+
         setTimeout(() => {
-          setMessages(prev => [...prev, aiMsg]);
+          setMessages((prev) => [...prev, aiMsg]);
           if (channelRef.current) {
             channelRef.current.send({
               type: 'broadcast',
@@ -131,17 +131,18 @@ export const StudyRoomView: React.FC = () => {
 
   const simulatePeer = () => {
     setIsSimulating(true);
-    setParticipants(prev => [...new Set([...prev, 'Rahul (Peer)'])]);
-    
+    setParticipants((prev) => [...new Set([...prev, 'Rahul (Peer)'])]);
+
     setTimeout(() => {
       const peerMsg: StudyRoomMessage = {
         id: crypto.randomUUID(),
         user_id: 'simulated-peer',
         name: 'Rahul (Peer)',
-        content: "Hey everyone! I'm stuck on Newton's second law. Can anyone explain how inertia relates to it?",
+        content:
+          "Hey everyone! I'm stuck on Newton's second law. Can anyone explain how inertia relates to it?",
         timestamp: new Date().toISOString(),
       };
-      setMessages(prev => [...prev, peerMsg]);
+      setMessages((prev) => [...prev, peerMsg]);
       triggerAIModeration([...messages, peerMsg]);
     }, 2000);
   };
@@ -155,15 +156,17 @@ export const StudyRoomView: React.FC = () => {
           <Users className="w-5 h-5 text-[#2563EB] dark:text-[#60A5FA]" />
           <h2 className="font-bold text-lg">Study Room</h2>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto space-y-2">
-          <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Online Now</div>
+          <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">
+            Online Now
+          </div>
           <AnimatePresence>
             {participants.map((p, i) => (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                key={i} 
+                key={i}
                 className="flex items-center gap-3 p-2 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-black/5 dark:border-white/5"
               >
                 <div className="w-8 h-8 rounded-full bg-[#2563EB]/10 dark:bg-[#60A5FA]/10 flex items-center justify-center">
@@ -176,7 +179,7 @@ export const StudyRoomView: React.FC = () => {
           </AnimatePresence>
         </div>
 
-        <button 
+        <button
           onClick={simulatePeer}
           disabled={isSimulating}
           className="mt-4 w-full py-2 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors disabled:opacity-50"
@@ -190,7 +193,9 @@ export const StudyRoomView: React.FC = () => {
         <div className="p-4 border-b border-black/5 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-900/50">
           <h3 className="font-bold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
             Physics 101 Cohort
-            <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] uppercase tracking-wider">Live</span>
+            <span className="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-[10px] uppercase tracking-wider">
+              Live
+            </span>
           </h3>
         </div>
 
@@ -201,16 +206,16 @@ export const StudyRoomView: React.FC = () => {
               <p>Welcome to the Study Room! Say hi to start learning together.</p>
             </div>
           )}
-          
+
           <AnimatePresence>
             {messages.map((msg, i) => {
               const isMe = msg.user_id === user?.id;
-              
+
               return (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  key={i} 
+                  key={i}
                   className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}
                 >
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1 px-1">
@@ -222,10 +227,10 @@ export const StudyRoomView: React.FC = () => {
                       msg.name
                     )}
                   </span>
-                  <div 
+                  <div
                     className={`max-w-[80%] p-4 rounded-2xl ${
-                      isMe 
-                        ? 'bg-[#2563EB] text-white rounded-tr-sm shadow-md shadow-blue-500/20' 
+                      isMe
+                        ? 'bg-[#2563EB] text-white rounded-tr-sm shadow-md shadow-blue-500/20'
                         : msg.isAI
                           ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100 border border-blue-200 dark:border-blue-800/50 rounded-tl-sm'
                           : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-tl-sm'
@@ -249,7 +254,7 @@ export const StudyRoomView: React.FC = () => {
               placeholder="Ask a question or help a peer..."
               className="w-full bg-zinc-50 dark:bg-zinc-900 border border-black/10 dark:border-white/10 rounded-2xl pl-4 pr-12 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB] text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400"
             />
-            <button 
+            <button
               type="submit"
               disabled={!input.trim()}
               className="absolute right-2 p-2 bg-[#2563EB] hover:bg-blue-600 text-white rounded-xl disabled:opacity-50 transition-colors"

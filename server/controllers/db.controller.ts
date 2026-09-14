@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { supabase, getAuthSupabase, adminSupabase } from '../lib/supabase';
 
 const getClient = (req: Request) => {
-  return adminSupabase;
+  const tokenHeader = req.headers.authorization?.split(' ')[1];
+  return getAuthSupabase(tokenHeader);
 };
 
 export const getUserChats = async (req: Request, res: Response, next: NextFunction) => {
@@ -49,7 +50,12 @@ export const createChat = async (req: Request, res: Response, next: NextFunction
 
     if (error) {
       console.warn('Supabase error in createChat, falling back to mock chat:', error.message);
-      return res.json({ id: 'mock-chat-' + Date.now(), user_id: userId, title, created_at: new Date().toISOString() });
+      return res.json({
+        id: 'mock-chat-' + Date.now(),
+        user_id: userId,
+        title,
+        created_at: new Date().toISOString(),
+      });
     }
     res.json(data);
   } catch (err: any) {
@@ -108,6 +114,36 @@ export const getUserMastery = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+export const getUserVault = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    if (userId !== (req as any).user?.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const client = getClient(req);
+    // Fetch all pinned messages that belong to chats owned by this user
+    const { data, error } = await client
+      .from('messages')
+      .select('*, chats!inner(user_id, title)')
+      .eq('chats.user_id', userId)
+      .eq('is_pinned', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.warn('Supabase error in getUserVault:', error.message);
+      return res.json([]);
+    }
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const getCohortAnalytics = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // 1. Get cohort analytics (topics)
@@ -124,7 +160,9 @@ export const getCohortAnalytics = async (req: Request, res: Response, next: Next
     }));
 
     // 2. Get overall verified rate securely
-    const { data: overallVerifiedRate, error: rateError } = await supabase.rpc('get_global_verified_rate');
+    const { data: overallVerifiedRate, error: rateError } = await supabase.rpc(
+      'get_global_verified_rate',
+    );
     if (rateError) console.warn('Supabase error getting global verified rate:', rateError.message);
 
     // 3. Get total queries count securely
@@ -141,8 +179,8 @@ export const getCohortAnalytics = async (req: Request, res: Response, next: Next
       globalStats: {
         overallVerifiedRate: rate,
         totalQueries: total,
-        criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0
-      }
+        criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0,
+      },
     });
   } catch (err) {
     next(err);
@@ -151,7 +189,9 @@ export const getCohortAnalytics = async (req: Request, res: Response, next: Next
 
 export const getPublicTrustStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { data: overallVerifiedRate, error: rateError } = await supabase.rpc('get_global_verified_rate');
+    const { data: overallVerifiedRate, error: rateError } = await supabase.rpc(
+      'get_global_verified_rate',
+    );
     if (rateError) console.warn('Supabase error getting global verified rate:', rateError.message);
 
     const { data: totalQueries, error: countError } = await supabase.rpc('get_total_queries');
@@ -165,17 +205,21 @@ export const getPublicTrustStats = async (req: Request, res: Response, next: Nex
     res.json({
       overallVerifiedRate: rate,
       totalQueries: total,
-      criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0
+      criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0,
     });
   } catch (err) {
     next(err);
   }
 };
 
-export const getPersonalCohortAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+export const getPersonalCohortAnalytics = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
   try {
     const client = getClient(req);
-    
+
     // 1. Get user's topic mastery data (RLS will filter automatically)
     const { data: masteryData, error: masteryError } = await client
       .from('user_topic_mastery')
@@ -193,18 +237,18 @@ export const getPersonalCohortAnalytics = async (req: Request, res: Response, ne
         cohortId: row.topic_title || row.topic_id,
         meanScore,
         variance: 0,
-        participation: 1
+        participation: 1,
       };
     });
 
     let overallVerifiedRate = 0;
     let totalVerified = 0;
     let totalFlagged = 0;
-    
+
     if (masteryData) {
-      masteryData.forEach(row => {
-        totalVerified += (row.verified_count || 0);
-        totalFlagged += (row.flagged_count || 0);
+      masteryData.forEach((row) => {
+        totalVerified += row.verified_count || 0;
+        totalFlagged += row.flagged_count || 0;
       });
       const total = totalVerified + totalFlagged;
       if (total > 0) {
@@ -229,8 +273,8 @@ export const getPersonalCohortAnalytics = async (req: Request, res: Response, ne
       globalStats: {
         overallVerifiedRate,
         totalQueries: totalQs,
-        criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0
-      }
+        criticCaughtErrors: criticCaughtErrors > 0 ? criticCaughtErrors : 0,
+      },
     });
   } catch (err) {
     next(err);
@@ -261,8 +305,8 @@ export const getRecommendations = async (req: Request, res: Response, next: Next
 
     // Filter to at least 1 attempt, sort by masteryScore ascending, take top 3
     const recommendations = (data || [])
-      .filter(t => (t.verified_count + t.flagged_count) > 0)
-      .map(t => {
+      .filter((t) => t.verified_count + t.flagged_count > 0)
+      .map((t) => {
         const total = t.verified_count + t.flagged_count;
         const score = Math.round((t.verified_count / total) * 100);
         return { ...t, masteryScore: score, totalAttempts: total };
@@ -279,7 +323,7 @@ export const getRecommendations = async (req: Request, res: Response, next: Next
 export const flagForReview = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { userId, chatId, messageId, question, criticNotes } = req.body;
-    
+
     if (!userId || !question) {
       return res.status(400).json({ error: 'userId and question are required' });
     }
@@ -287,13 +331,15 @@ export const flagForReview = async (req: Request, res: Response, next: NextFunct
     const client = getClient(req);
     const { data, error } = await client
       .from('review_queue')
-      .insert([{
-        user_id: userId,
-        chat_id: chatId,
-        message_id: messageId,
-        question: question,
-        critic_notes: criticNotes
-      }])
+      .insert([
+        {
+          user_id: userId,
+          chat_id: chatId,
+          message_id: messageId,
+          question: question,
+          critic_notes: criticNotes,
+        },
+      ])
       .select()
       .single();
 
@@ -381,7 +427,7 @@ export const toggleChatPin = async (req: Request, res: Response, next: NextFunct
       .single();
 
     if (error) {
-      console.warn("Supabase error pinning chat (column might be missing):", error.message);
+      console.warn('Supabase error pinning chat (column might be missing):', error.message);
       // Fail gracefully if DB doesn't support pinning yet
       return res.json({ id: chatId, is_pinned });
     }
@@ -416,8 +462,7 @@ export const toggleMessagePin = async (req: Request, res: Response, next: NextFu
 
 export const getReviewQueue = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const client = getClient(req);
-    const { data, error } = await client
+    const { data, error } = await adminSupabase
       .from('review_queue')
       .select('*')
       .order('created_at', { ascending: false });
@@ -433,8 +478,7 @@ export const resolveReview = async (req: Request, res: Response, next: NextFunct
   try {
     const { reviewId } = req.params;
     const { resolutionNotes } = req.body;
-    const client = getClient(req);
-    const { data, error } = await client
+    const { data, error } = await adminSupabase
       .from('review_queue')
       .update({ resolution_notes: resolutionNotes, status: 'resolved' })
       .eq('id', reviewId)
@@ -450,12 +494,8 @@ export const resolveReview = async (req: Request, res: Response, next: NextFunct
 
 export const getFlaggedStudents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const client = getClient(req);
-    
     // We fetch all mastery records that indicate struggling
-    const { data, error } = await client
-      .from('user_topic_mastery')
-      .select('*');
+    const { data, error } = await adminSupabase.from('user_topic_mastery').select('*');
 
     if (error) {
       console.warn('Supabase error in getFlaggedStudents:', error.message);
@@ -467,8 +507,8 @@ export const getFlaggedStudents = async (req: Request, res: Response, next: Next
 
     (data || []).forEach((row: any) => {
       const totalAttempts = row.verified_count + row.flagged_count;
-      const successRate = totalAttempts > 0 ? (row.verified_count / totalAttempts) : 1;
-      
+      const successRate = totalAttempts > 0 ? row.verified_count / totalAttempts : 1;
+
       // Criteria for struggling: success rate <= 0.6 AND at least 2 flagged attempts OR strictly flagged > 2
       if ((successRate <= 0.6 && row.flagged_count >= 2) || row.flagged_count > 2) {
         if (!flaggedUsers.has(row.user_id)) {
@@ -478,18 +518,18 @@ export const getFlaggedStudents = async (req: Request, res: Response, next: Next
             userId: row.user_id,
             name: mockName,
             riskScore: 0,
-            failedTopics: []
+            failedTopics: [],
           });
         }
-        
+
         const user = flaggedUsers.get(row.user_id);
         user.failedTopics.push({
           topicId: row.topic_id,
           title: row.topic_title || row.topic_id,
           flaggedCount: row.flagged_count,
-          verifiedCount: row.verified_count
+          verifiedCount: row.verified_count,
         });
-        
+
         // Increase risk score heavily based on flagged counts
         user.riskScore += row.flagged_count * 10;
       }
@@ -497,7 +537,7 @@ export const getFlaggedStudents = async (req: Request, res: Response, next: Next
 
     // Sort by highest risk score
     const result = Array.from(flaggedUsers.values()).sort((a, b) => b.riskScore - a.riskScore);
-    
+
     res.json(result);
   } catch (err) {
     next(err);
@@ -507,7 +547,7 @@ export const getFlaggedStudents = async (req: Request, res: Response, next: Next
 export const submitWaitlist = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email } = req.body;
-    
+
     // Basic email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
@@ -515,22 +555,25 @@ export const submitWaitlist = async (req: Request, res: Response, next: NextFunc
     }
 
     const client = adminSupabase;
-    
-    const { data, error } = await client
-      .from('waitlist')
-      .insert([{ email }])
-      .select()
-      .single();
+
+    const { data, error } = await client.from('waitlist').insert([{ email }]).select().single();
 
     if (error) {
       // Check for unique constraint violation (duplicate email)
-      if (error.code === '23505' || error.message.includes('unique constraint') || error.message.includes('duplicate key value')) {
+      if (
+        error.code === '23505' ||
+        error.message.includes('unique constraint') ||
+        error.message.includes('duplicate key value')
+      ) {
         // We can treat it as a success so the user doesn't know, or just return success
         return res.json({ success: true, message: 'Already on the waitlist' });
       }
       console.warn('Supabase waitlist error:', error.message);
       // Fallback for development if table not created
-      if (error.code === '42P01' || error.message.includes('relation "public.waitlist" does not exist')) {
+      if (
+        error.code === '42P01' ||
+        error.message.includes('relation "public.waitlist" does not exist')
+      ) {
         return res.json({ success: true, mock: true, message: 'Mock success, table missing' });
       }
       throw error;

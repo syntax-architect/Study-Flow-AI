@@ -6,14 +6,14 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 export async function ingestDocument(filePath: string, subject: string, chapter: string) {
-  console.log("Loading embedding model...");
+  console.log('Loading embedding model...');
   const extractor = await getExtractor();
 
   const text = await fs.promises.readFile(filePath, 'utf8');
 
   // Simple chunking by paragraph/section
-  const chunks = text.split(/\n\s*\n/).filter(c => c.trim().length > 20);
-  
+  const chunks = text.split(/\n\s*\n/).filter((c) => c.trim().length > 20);
+
   console.log(`Found ${chunks.length} chunks. Generating embeddings...`);
 
   for (let i = 0; i < chunks.length; i++) {
@@ -26,7 +26,7 @@ export async function ingestDocument(filePath: string, subject: string, chapter:
     const { error } = await supabase.from('documents').insert({
       content,
       metadata: { source: path.basename(filePath), chunkIndex: i, subject, chapter },
-      embedding
+      embedding,
     });
 
     if (error) {
@@ -36,7 +36,7 @@ export async function ingestDocument(filePath: string, subject: string, chapter:
     }
   }
 
-  console.log("Ingestion complete!");
+  console.log('Ingestion complete!');
 }
 
 import { fileURLToPath } from 'url';
@@ -45,6 +45,7 @@ import { fileURLToPath } from 'url';
 const isMainModule = process.argv[1]?.endsWith('ingest.ts');
 if (isMainModule) {
   const defaultPath = path.join(process.cwd(), 'server', 'data', 'ncert_physics_ch5.md');
-  ingestDocument(defaultPath, 'NCERT Class 11 Physics', 'Ch 5: Laws of Motion')
-    .catch(console.error);
+  ingestDocument(defaultPath, 'NCERT Class 11 Physics', 'Ch 5: Laws of Motion').catch(
+    console.error,
+  );
 }

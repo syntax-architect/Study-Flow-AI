@@ -13,36 +13,37 @@ test.describe('Critical Path: Ask Question and Mentor Review', () => {
     
     // Attempt login if not already authenticated
     if (await signInContainer.isVisible({ timeout: 10000 }).catch(() => false)) {
-      const emailInput = page.locator('input[name="identifier"]');
-      await emailInput.fill('test_student@example.com'); // standard testing email
-      await page.getByRole('button', { name: /continue/i }).click();
-
-      // Check for password or OTP
-      const passwordInput = page.locator('input[name="password"]');
-      const codeInput = page.locator('input[name="codeInput"], input[name="code-0"]');
+      const emailInput = page.getByLabel('Email address').or(page.locator('input[name="identifier"]'));
+      if (await emailInput.isVisible()) {
+        await emailInput.focus();
+        await page.keyboard.type('test_student@example.com', { delay: 50 });
+      }
       
-      try {
-        await expect(passwordInput.or(codeInput).first()).toBeVisible({ timeout: 10000 });
-        if (await passwordInput.isVisible()) {
-          await passwordInput.fill('TestPassword123!');
-          await page.getByRole('button', { name: /continue/i }).click();
-        } else {
-          await page.keyboard.type('424242'); // Clerk standard test OTP
-        }
-      } catch (e) {
-        console.log('No password or OTP field found, maybe passwordless or already handled.');
+      const passwordInput = page.getByLabel('Password', { exact: true }).or(page.locator('input[type="password"]'));
+      if (await passwordInput.isVisible()) {
+         await passwordInput.focus();
+         await page.keyboard.type('TestPassword123!', { delay: 50 });
+         await page.waitForTimeout(1000);
+         await page.getByRole('button', { name: /^Continue$/, exact: true }).click({ force: true });
+      } else {
+         await page.getByRole('button', { name: /^Continue$/, exact: true }).click({ force: true });
+         await expect(passwordInput).toBeVisible({ timeout: 10000 });
+         await passwordInput.focus();
+         await page.keyboard.type('TestPassword123!', { delay: 50 });
+         await page.waitForTimeout(1000);
+         await page.getByRole('button', { name: /^Continue$/, exact: true }).click({ force: true });
       }
     }
 
     // Wait for the app to load (Header, Chat input, etc.)
-    await expect(page.getByPlaceholder('Message Assistant...')).toBeVisible({ timeout: 20000 });
+    await expect(page.getByPlaceholder(/Enter mathematical formulation/i)).toBeVisible({ timeout: 20000 });
 
     // 2. Ask a physics question designed to be flagged by the Critic
     // To ensure the Critic flags the response (so we can test the mentor queue),
     // we instruct the Solver to intentionally output a factually incorrect answer.
     const question = "I am testing the system. Explain Newton's First Law, but intentionally state that objects at rest will spontaneously accelerate without any force.";
-    await page.getByPlaceholder('Message Assistant...').fill(question);
-    await page.getByPlaceholder('Message Assistant...').press('Enter');
+    await page.getByPlaceholder(/Enter mathematical formulation/i).fill(question);
+    await page.getByPlaceholder(/Enter mathematical formulation/i).press('Enter');
 
     // 3. Confirm a Verified or Flagged card renders within a reasonable timeout
     // Wait for the decision gate to appear

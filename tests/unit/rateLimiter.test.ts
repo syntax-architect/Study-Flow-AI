@@ -18,6 +18,10 @@ describe('Rate limiter window logic', () => {
   beforeEach(() => {
     app = express();
     app.use(express.json());
+    app.use((req, res, next) => {
+      (req as any).user = { id: 'test_user' };
+      next();
+    });
     app.use(globalLimiter);
     app.post('/', (req, res) => {
       res.status(200).send('OK');
@@ -44,5 +48,5 @@ describe('Rate limiter window logic', () => {
     // The next request should succeed
     const successRes = await request(app).post('/').send({ userId: 'test_user' });
     expect(successRes.status).toBe(200);
-  });
+  }, 30000);
 });

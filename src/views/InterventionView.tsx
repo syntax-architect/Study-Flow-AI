@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { FlaggedStudent } from '../types';
-import { AlertTriangle, ShieldAlert, GraduationCap, ChevronRight, Activity, Mail } from 'lucide-react';
+import {
+  AlertTriangle,
+  ShieldAlert,
+  GraduationCap,
+  ChevronRight,
+  Activity,
+  Mail,
+} from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { ToastType } from '../components/common/Toast';
 import { SEO } from '../components/common/SEO';
@@ -21,9 +28,9 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
       setLoading(true);
       const token = await getToken();
       const res = await fetch('/api/db/intervention/flagged-students', {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       if (res.ok) {
         const data = await res.json();
         setStudents(data);
@@ -50,7 +57,9 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
         <div className="text-center text-zinc-500">
           <ShieldAlert className="w-12 h-12 mx-auto mb-4 opacity-50 text-red-500" />
           <h2 className="text-xl font-medium">Access Denied</h2>
-          <p className="mt-2 text-sm">Please enable Teacher Mode in settings to access the Intervention Dashboard.</p>
+          <p className="mt-2 text-sm">
+            Please enable Teacher Mode in settings to access the Intervention Dashboard.
+          </p>
         </div>
       </div>
     );
@@ -71,7 +80,8 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
             </h2>
           </div>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            AI-driven identification of students consistently failing foundational concepts. Proactively intervene before exams.
+            AI-driven identification of students consistently failing foundational concepts.
+            Proactively intervene before exams.
           </p>
         </div>
       </div>
@@ -84,7 +94,9 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
         <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-[24px] p-8 text-center">
           <GraduationCap className="w-12 h-12 text-green-500 mx-auto mb-3 opacity-80" />
           <h3 className="text-lg font-bold text-green-700 dark:text-green-400">All Clear</h3>
-          <p className="text-green-600 dark:text-green-500/80 mt-1">No students are currently flagged as high-risk.</p>
+          <p className="text-green-600 dark:text-green-500/80 mt-1">
+            No students are currently flagged as high-risk.
+          </p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -106,24 +118,31 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
                           {student.name.charAt(8)}
                         </div>
                         <div>
-                          <h3 className="font-bold text-zinc-900 dark:text-zinc-50">{student.name}</h3>
+                          <h3 className="font-bold text-zinc-900 dark:text-zinc-50">
+                            {student.name}
+                          </h3>
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 uppercase tracking-wider">
                             Risk Score: {student.riskScore}
                           </span>
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Failed Topics List */}
                     <div className="space-y-3">
-                      <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Failed Foundational Concepts</h4>
+                      <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                        Failed Foundational Concepts
+                      </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {student.failedTopics.map((topic, idx) => {
                           const total = topic.flaggedCount + topic.verifiedCount;
                           const failRate = Math.round((topic.flaggedCount / total) * 100);
-                          
+
                           return (
-                            <div key={idx} className="bg-red-50/50 dark:bg-[#1A1010] border border-red-100 dark:border-red-900/30 p-3 rounded-xl flex flex-col gap-2 relative overflow-hidden group">
+                            <div
+                              key={idx}
+                              className="bg-red-50/50 dark:bg-[#1A1010] border border-red-100 dark:border-red-900/30 p-3 rounded-xl flex flex-col gap-2 relative overflow-hidden group"
+                            >
                               <div className="flex items-start gap-2 z-10">
                                 <AlertTriangle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" />
                                 <span className="text-[13px] font-semibold text-red-900 dark:text-red-200 leading-tight">
@@ -140,7 +159,10 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
                               </div>
                               {/* Progress bar background */}
                               <div className="absolute bottom-0 left-0 h-1 bg-red-500/20 w-full">
-                                <div className="h-full bg-red-500" style={{ width: `${failRate}%` }} />
+                                <div
+                                  className="h-full bg-red-500"
+                                  style={{ width: `${failRate}%` }}
+                                />
                               </div>
                             </div>
                           );
@@ -151,14 +173,16 @@ export const InterventionView: React.FC<InterventionViewProps> = ({ onNotify, is
 
                   {/* Actions Sidebar */}
                   <div className="md:w-64 flex flex-col gap-3 justify-center border-t md:border-t-0 md:border-l border-zinc-100 dark:border-white/5 pt-4 md:pt-0 md:pl-6">
-                    <button 
-                      onClick={() => onNotify(`Intervention initiated for ${student.name}`, 'success')}
+                    <button
+                      onClick={() =>
+                        onNotify(`Intervention initiated for ${student.name}`, 'success')
+                      }
                       className="w-full flex items-center justify-center gap-2 bg-red-500 hover:bg-red-600 text-white font-semibold py-3 px-4 rounded-xl transition-all shadow-sm shadow-red-500/20 active:scale-95"
                     >
                       <Mail className="w-4 h-4" />
                       Intervene Now
                     </button>
-                    <button 
+                    <button
                       onClick={() => onNotify('Generating remedial worksheet (Demo)', 'info')}
                       className="w-full flex items-center justify-center gap-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700/50 text-zinc-700 dark:text-zinc-300 font-semibold py-3 px-4 rounded-xl transition-all active:scale-95"
                     >

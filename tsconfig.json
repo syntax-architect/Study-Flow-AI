@@ -24,5 +24,6 @@
     "noEmit": true,
     "strict": true,
     "esModuleInterop": true
-  }
+  },
+  "exclude": ["scratch/**/*", "fix_ai.js"]
 }

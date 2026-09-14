@@ -17,11 +17,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   description,
   actionLabel,
   onAction,
-  className = ''
+  className = '',
 }) => {
   return (
-    <div className={`flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-black/20 ${className}`}>
-      <m.div 
+    <div
+      className={`flex flex-col items-center justify-center text-center p-8 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-black/20 ${className}`}
+    >
+      <m.div
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', damping: 15, stiffness: 100 }}
@@ -31,7 +33,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
       </m.div>
       <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">{title}</h3>
       <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-sm mb-6">{description}</p>
-      
+
       {actionLabel && onAction && (
         <button
           onClick={onAction}

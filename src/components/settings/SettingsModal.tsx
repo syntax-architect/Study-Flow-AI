@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
-import { Settings, Volume2, VolumeX, Moon, Trash2, LogOut, X, Loader2, GraduationCap } from 'lucide-react';
+import {
+  Settings,
+  Volume2,
+  VolumeX,
+  Moon,
+  Trash2,
+  LogOut,
+  X,
+  Loader2,
+  GraduationCap,
+} from 'lucide-react';
 import { playSound } from '../../utils/sound';
 
 interface SettingsModalProps {
@@ -16,15 +26,24 @@ interface SettingsModalProps {
   onSignOut: () => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ 
-  isOpen, onClose, soundEnabled, onToggleSound, isDarkMode, onToggleDarkMode, isTeacherMode, onToggleTeacherMode, onClearData, onSignOut 
+export const SettingsModal: React.FC<SettingsModalProps> = ({
+  isOpen,
+  onClose,
+  soundEnabled,
+  onToggleSound,
+  isDarkMode,
+  onToggleDarkMode,
+  isTeacherMode,
+  onToggleTeacherMode,
+  onClearData,
+  onSignOut,
 }) => {
   const [isClearing, setIsClearing] = useState(false);
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 z-[60] bg-[#09090b]/20 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={onClose}
         >
@@ -42,7 +61,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
                 <h2 className="font-extrabold text-zinc-900 dark:text-zinc-50">Settings</h2>
               </div>
-              <button onClick={() => { playSound('click', soundEnabled); onClose(); }} className="cursor-pointer w-8 h-8 flex items-center justify-center bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm hover:border-black/10 dark:hover:border-white/10 active:bg-zinc-50/50 dark:bg-zinc-900/50 rounded-full text-zinc-900 dark:text-zinc-50 transition-all">
+              <button
+                onClick={() => {
+                  playSound('click', soundEnabled);
+                  onClose();
+                }}
+                className="cursor-pointer w-8 h-8 flex items-center justify-center bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm hover:border-black/10 dark:hover:border-white/10 active:bg-zinc-50/50 dark:bg-zinc-900/50 rounded-full text-zinc-900 dark:text-zinc-50 transition-all"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -50,31 +75,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="p-6 space-y-6">
               {/* Preferences */}
               <div className="space-y-3">
-                <h3 className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-widest">Preferences</h3>
-                
-                <button 
-                  onClick={() => { onToggleSound(); playSound('click', !soundEnabled); }}
+                <h3 className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-widest">
+                  Preferences
+                </h3>
+
+                <button
+                  onClick={() => {
+                    onToggleSound();
+                    playSound('click', !soundEnabled);
+                  }}
                   className="w-full flex items-center justify-between p-3 bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 rounded-2xl cursor-pointer hover:shadow-sm transition-all"
                   type="button"
                 >
                   <div className="flex items-center gap-3 pointer-events-none">
                     <div className="w-8 h-8 rounded-full bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm flex items-center justify-center text-zinc-900 dark:text-zinc-50">
-                      {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                      {soundEnabled ? (
+                        <Volume2 className="w-4 h-4" />
+                      ) : (
+                        <VolumeX className="w-4 h-4" />
+                      )}
                     </div>
-                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Sound Effects</span>
+                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                      Sound Effects
+                    </span>
                   </div>
-                  <div 
+                  <div
                     className={`pointer-events-none w-12 h-6 rounded-full transition-all relative ${soundEnabled ? 'bg-[#2563EB] border border-transparent' : 'bg-black/10 dark:bg-white/10 shadow-inner border border-black/5 dark:border-white/5'}`}
                   >
-                    <m.div 
+                    <m.div
                       className={`w-5 h-5 rounded-full absolute top-0.5 shadow-sm transition-all bg-white`}
                       animate={{ left: soundEnabled ? '26px' : '2px' }}
                     />
                   </div>
                 </button>
 
-                <button 
-                  onClick={() => { onToggleDarkMode(); playSound('click', soundEnabled); }}
+                <button
+                  onClick={() => {
+                    onToggleDarkMode();
+                    playSound('click', soundEnabled);
+                  }}
                   className="w-full flex items-center justify-between p-3 bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 rounded-2xl cursor-pointer hover:shadow-sm transition-all"
                   type="button"
                 >
@@ -82,20 +121,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="w-8 h-8 rounded-full bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm flex items-center justify-center text-zinc-900 dark:text-zinc-50">
                       <Moon className="w-4 h-4" />
                     </div>
-                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Dark Mode</span>
+                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                      Dark Mode
+                    </span>
                   </div>
-                  <div 
+                  <div
                     className={`pointer-events-none w-12 h-6 rounded-full transition-all relative ${isDarkMode ? 'bg-[#2563EB] border border-transparent' : 'bg-black/10 dark:bg-white/10 shadow-inner border border-black/5 dark:border-white/5'}`}
                   >
-                    <m.div 
+                    <m.div
                       className={`w-5 h-5 rounded-full absolute top-0.5 shadow-sm transition-all bg-white`}
                       animate={{ left: isDarkMode ? '26px' : '2px' }}
                     />
                   </div>
                 </button>
 
-                <button 
-                  onClick={() => { onToggleTeacherMode(); playSound('click', soundEnabled); }}
+                <button
+                  onClick={() => {
+                    onToggleTeacherMode();
+                    playSound('click', soundEnabled);
+                  }}
                   className="w-full flex items-center justify-between p-3 bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 rounded-2xl cursor-pointer hover:shadow-sm transition-all"
                   type="button"
                 >
@@ -103,12 +147,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     <div className="w-8 h-8 rounded-full bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm flex items-center justify-center text-zinc-900 dark:text-zinc-50">
                       <GraduationCap className="w-4 h-4" />
                     </div>
-                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Teacher Dashboard Mode</span>
+                    <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                      Teacher Dashboard Mode
+                    </span>
                   </div>
-                  <div 
+                  <div
                     className={`pointer-events-none w-12 h-6 rounded-full transition-all relative ${isTeacherMode ? 'bg-[#2563EB] border border-transparent' : 'bg-black/10 dark:bg-white/10 shadow-inner border border-black/5 dark:border-white/5'}`}
                   >
-                    <m.div 
+                    <m.div
                       className={`w-5 h-5 rounded-full absolute top-0.5 shadow-sm transition-all bg-white`}
                       animate={{ left: isTeacherMode ? '26px' : '2px' }}
                     />
@@ -118,12 +164,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Data & Account */}
               <div className="space-y-3">
-                <h3 className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-widest">Data & Account</h3>
-                
-                <button 
-                  onClick={async () => { 
+                <h3 className="text-[10px] font-bold text-zinc-900 dark:text-zinc-50 opacity-80 uppercase tracking-widest">
+                  Data & Account
+                </h3>
+
+                <button
+                  onClick={async () => {
                     if (isClearing) return;
-                    playSound('warning', soundEnabled); 
+                    playSound('warning', soundEnabled);
                     setIsClearing(true);
                     try {
                       await onClearData();
@@ -137,14 +185,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm flex items-center justify-center transition-all group-hover:text-white group-hover:bg-[#F43F5E]">
-                      {isClearing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      {isClearing ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
                     </div>
-                    <span className="text-sm font-bold">{isClearing ? 'Clearing...' : 'Clear Chat History'}</span>
+                    <span className="text-sm font-bold">
+                      {isClearing ? 'Clearing...' : 'Clear Chat History'}
+                    </span>
                   </div>
                 </button>
 
-                <button 
-                  onClick={() => { playSound('click', soundEnabled); onSignOut(); }}
+                <button
+                  onClick={() => {
+                    playSound('click', soundEnabled);
+                    onSignOut();
+                  }}
                   className="cursor-pointer w-full flex items-center justify-between p-3 bg-white dark:bg-[#09090b] border border-black/5 dark:border-white/5 shadow-sm hover:border-black/10 dark:hover:border-white/10 active:bg-zinc-50/50 dark:bg-zinc-900/50 rounded-2xl transition-all text-zinc-900 dark:text-zinc-50 group"
                 >
                   <div className="flex items-center gap-3">
@@ -161,4 +218,4 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       )}
     </AnimatePresence>
   );
-}
+};

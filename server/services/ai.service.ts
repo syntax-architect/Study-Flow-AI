@@ -31,29 +31,42 @@ export class AiService {
   static generateSolverCritic = AiSolverCritic.generateSolverCritic;
 
   // Remaining methods kept inline
-  static async streamChat(messages: any[], systemInstruction: string, filter?: { subject?: string; chapter?: string }, userId?: string, token?: string) {
+  static async streamChat(
+    messages: any[],
+    systemInstruction: string,
+    filter?: { subject?: string; chapter?: string },
+    userId?: string,
+    token?: string,
+    abortSignal?: AbortSignal
+  ) {
     let primaryError: any = null;
-    
+
     let processedMessages = messages;
     if (messages.length > 12) {
       const earlierMessages = messages.slice(0, -6);
       const lastSixMessages = messages.slice(-6);
-      
-      const earlierHistoryText = earlierMessages.map((m: any) => `${m.role}: ${m.content}`).join('\n');
+
+      const earlierHistoryText = earlierMessages
+        .map((m: any) => `${m.role}: ${m.content}`)
+        .join('\n');
       const summaryPrompt = `Summarize the following chat history concisely. Focus on the student's learning progress, concepts covered, and any persistent confusion.\n\nHistory:\n${earlierHistoryText}`;
-      
+
       const cacheKey = `chat_summary_${Buffer.from(earlierHistoryText).toString('base64').substring(0, 50)}`;
       let summary = appCache.get<string>(cacheKey) || '';
 
       if (!summary) {
         try {
-          const client = config.useNewAiArchitecture ? AiClient.getClientForProvider(config.routerProvider) : AiClient.getPrimaryClient();
-          const routerModel = config.useNewAiArchitecture ? config.routerModel : config.primaryAiModel;
+          const client = config.useNewAiArchitecture
+            ? AiClient.getClientForProvider(config.routerProvider)
+            : AiClient.getPrimaryClient();
+          const routerModel = config.useNewAiArchitecture
+            ? config.routerModel
+            : config.primaryAiModel;
           const summaryRes = await client.chat.completions.create({
             model: routerModel,
             messages: [{ role: 'user', content: summaryPrompt }],
             max_tokens: 150,
-            temperature: 0.1
+            temperature: 0.1,
           });
           summary = summaryRes.choices[0]?.message?.content || '';
           if (summary) {
@@ -67,7 +80,7 @@ export class AiService {
       if (summary) {
         processedMessages = [
           { role: 'system', content: `Previous Context Summary: ${summary}` },
-          ...lastSixMessages
+          ...lastSixMessages,
         ];
       }
     }
@@ -96,34 +109,40 @@ You are a dual-engine AI. Ensure your answer strictly aligns with the Ground Tru
 
     const streamMessages = [
       { role: 'system', content: fullSystemInstruction },
-      { role: 'system', content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================` },
-      ...processedMessages
+      {
+        role: 'system',
+        content: `=== GROUND TRUTH ===\n${retrievedContext}\n====================`,
+      },
+      ...processedMessages,
     ];
 
     // Trigger async background extraction
     if (userId) {
-      AiService.extractAndStoreMemory(userId, messages).catch(err => {
+      AiService.extractAndStoreMemory(userId, messages).catch((err) => {
         logger.error('[AI Engine] Background memory extraction failed:', err);
       });
     }
 
-    return await AiClient.executeStreamWithFallback(streamMessages, 'chat', userId, token);
+    return await AiClient.executeStreamWithFallback(streamMessages, 'chat', userId, token, abortSignal);
   }
 
   static async extractAndStoreMemory(userId: string, messages: any[]) {
     // Only extract if there's enough context
     if (!messages || messages.length < 4) return;
-    
+
     // Check cache to prevent extracting memory too often
     const cacheKey = `lastMemoryExtraction_${userId}`;
     const lastExtracted = appCache.get<number>(cacheKey);
-    if (lastExtracted && (Date.now() - lastExtracted) < 1000 * 60 * 15) {
+    if (lastExtracted && Date.now() - lastExtracted < 1000 * 60 * 15) {
       // Limit extraction to once every 15 minutes per user
       return;
     }
-    
-    const recentHistory = messages.slice(-8).map(m => `${m.role}: ${m.content}`).join('\n');
-    
+
+    const recentHistory = messages
+      .slice(-8)
+      .map((m) => `${m.role}: ${m.content}`)
+      .join('\n');
+
     const prompt = `Analyze the following chat history between a student and a tutor. 
 Identify ONE new, highly specific, and enduring fact about the student's learning profile. 
 Focus on:
@@ -139,12 +158,12 @@ ${recentHistory}`;
 
     try {
       const memorySchema = {
-        type: "object",
+        type: 'object',
         properties: {
-          insight: { type: "string" }
+          insight: { type: 'string' },
         },
-        required: ["insight"],
-        additionalProperties: false
+        required: ['insight'],
+        additionalProperties: false,
       };
 
       const res = await AiClient.executeWithFallback(
@@ -153,26 +172,28 @@ ${recentHistory}`;
         'memory_extraction',
         userId,
         'router', // Uses the fast router model
-        0.1
+        0.1,
       );
-      
+
       const insight = res.insight?.trim();
-      
-      if (insight && insight !== "NO_INSIGHT" && insight.length > 10) {
+
+      if (insight && insight !== 'NO_INSIGHT' && insight.length > 10) {
         logger.info(`[AI Engine] Background extracted new memory for user ${userId}: ${insight}`);
-        
+
         // Generate embedding
         const extractor = await getExtractor();
         const output = await extractor(insight, { pooling: 'mean', normalize: true });
         const embedding = Array.from(output.data);
-        
+
         // Store in DB
-        await supabase.from('user_memories').insert([{
-          user_id: userId,
-          content: insight,
-          embedding
-        }]);
-        
+        await supabase.from('user_memories').insert([
+          {
+            user_id: userId,
+            content: insight,
+            embedding,
+          },
+        ]);
+
         appCache.set(cacheKey, Date.now(), 3600); // Set cooldown
       }
     } catch (err) {
@@ -180,20 +201,26 @@ ${recentHistory}`;
     }
   }
 
-  static async generateTopicAudit(topicTitle: string, subtitle: string, unit: string, userId?: string, token?: string) {
+  static async generateTopicAudit(
+    topicTitle: string,
+    subtitle: string,
+    unit: string,
+    userId?: string,
+    token?: string,
+  ) {
     const schemaDescription = {
-      type: "object",
+      type: 'object',
       properties: {
-        status: { type: "string" },
-        auditDetails: { type: "string" },
+        status: { type: 'string' },
+        auditDetails: { type: 'string' },
         insights: {
-          type: "array",
-          items: { type: "string" }
+          type: 'array',
+          items: { type: 'string' },
         },
-        recommendedMasteryScore: { type: "integer" }
+        recommendedMasteryScore: { type: 'integer' },
       },
-      required: ["status", "auditDetails", "insights", "recommendedMasteryScore"],
-      additionalProperties: false
+      required: ['status', 'auditDetails', 'insights', 'recommendedMasteryScore'],
+      additionalProperties: false,
     };
 
     const cacheKey = `topicAudit_${Buffer.from(topicTitle + subtitle + unit).toString('base64')}`;
@@ -203,11 +230,25 @@ ${recentHistory}`;
     }
 
     const auditMessages = [
-      { role: 'system', content: MASTER_SYSTEM_PROMPT + `\n\nYou are StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases.` },
-      { role: 'user', content: `Perform a Critic Audit on the academic topic "${topicTitle}" (${subtitle}) in unit "${unit}". Evaluate mathematical consistency, sign conventions, and common student pitfalls.` }
+      {
+        role: 'system',
+        content:
+          MASTER_SYSTEM_PROMPT +
+          `\n\nYou are StudyFlow AI Critic Auditor. You audit physics concepts for mathematical consistency, sign errors, reference frames, and edge cases.`,
+      },
+      {
+        role: 'user',
+        content: `Perform a Critic Audit on the academic topic "${topicTitle}" (${subtitle}) in unit "${unit}". Evaluate mathematical consistency, sign conventions, and common student pitfalls.`,
+      },
     ];
 
-    const response = await AiClient.executeWithFallback(auditMessages, schemaDescription, 'topic_audit_response', userId, 'audit');
+    const response = await AiClient.executeWithFallback(
+      auditMessages,
+      schemaDescription,
+      'topic_audit_response',
+      userId,
+      'audit',
+    );
     appCache.set(cacheKey, response, 3600 * 24);
     return response;
   }
@@ -216,14 +257,15 @@ ${recentHistory}`;
     try {
       const base64Image = buffer.toString('base64');
       const dataUrl = `data:${mimetype};base64,${base64Image}`;
-      
+
       const primaryClient = AiClient.getPrimaryClient();
       const response = await primaryClient.chat.completions.create({
         model: config.visionAiModel,
         messages: [
           {
             role: 'system',
-            content: 'You are an expert OCR system. Transcribe the handwritten or printed text from the image accurately. Preserve all mathematical notation using LaTeX format ($...$ for inline, $$...$$ for block). Return ONLY the transcribed text without any extra conversational text or markdown blocks.'
+            content:
+              'You are an expert OCR system. Transcribe the handwritten or printed text from the image accurately. Preserve all mathematical notation using LaTeX format ($...$ for inline, $$...$$ for block). Return ONLY the transcribed text without any extra conversational text or markdown blocks.',
           },
           {
             role: 'user',
@@ -232,14 +274,14 @@ ${recentHistory}`;
               {
                 type: 'image_url',
                 image_url: {
-                  url: dataUrl
-                }
-              }
-            ]
-          }
+                  url: dataUrl,
+                },
+              },
+            ],
+          },
         ],
         max_tokens: 1000,
-        temperature: 0.1
+        temperature: 0.1,
       });
 
       return response.choices[0]?.message?.content?.trim() || '';
@@ -254,7 +296,7 @@ ${recentHistory}`;
       const primaryClient = AiClient.getPrimaryClient();
       const transcription = await primaryClient.audio.transcriptions.create({
         file: fs.createReadStream(filePath),
-        model: 'whisper-large-v3', 
+        model: 'whisper-large-v3',
         response_format: 'text',
       });
       return typeof transcription === 'string' ? transcription : (transcription as any).text || '';

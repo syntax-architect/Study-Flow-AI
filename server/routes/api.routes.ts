@@ -1,5 +1,10 @@
 import { Router } from 'express';
-import { handleSolverCritic, handleAuditTopic, handleChatStream, handleStudyRoomModerate } from '../controllers/ai.controller';
+import {
+  handleSolverCritic,
+  handleAuditTopic,
+  handleChatStream,
+  handleStudyRoomModerate,
+} from '../controllers/ai.controller';
 import { getHealth } from '../controllers/health.controller';
 import dbRoutes from './db.routes';
 
@@ -23,9 +28,13 @@ router.post('/ai/moderate', requireAuth, solverCriticRateLimiter, handleStudyRoo
 import multer from 'multer';
 import os from 'os';
 import path from 'path';
-import { handleVisionOCR, handleVoiceTranscribe, handleTextToSpeech } from '../controllers/ai.controller';
-const upload = multer({ 
-  storage: multer.memoryStorage(), 
+import {
+  handleVisionOCR,
+  handleVoiceTranscribe,
+  handleTextToSpeech,
+} from '../controllers/ai.controller';
+const upload = multer({
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
@@ -33,18 +42,21 @@ const upload = multer({
       return cb(new Error('Only standard image files are allowed'));
     }
     cb(null, true);
-  }
+  },
 });
-const diskUpload = multer({ 
-  dest: os.tmpdir(), 
+const diskUpload = multer({
+  dest: os.tmpdir(),
   limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (!['.mp3', '.wav', '.webm', '.m4a', '.mp4'].includes(ext) || !file.mimetype.startsWith('audio/') && !file.mimetype.startsWith('video/')) {
+    if (
+      !['.mp3', '.wav', '.webm', '.m4a', '.mp4'].includes(ext) ||
+      (!file.mimetype.startsWith('audio/') && !file.mimetype.startsWith('video/'))
+    ) {
       return cb(new Error('Only standard audio/video files are allowed'));
     }
     cb(null, true);
-  }
+  },
 });
 
 import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type';
@@ -70,7 +82,9 @@ const validateAudioUpload = async (req: any, res: any, next: any) => {
     const type = await fileTypeFromFile(safePath);
     if (!type || (!type.mime.startsWith('audio/') && !type.mime.startsWith('video/'))) {
       fs.unlink(safePath, () => {});
-      return res.status(400).json({ error: 'Invalid file type. Only real audio/video files are allowed.' });
+      return res
+        .status(400)
+        .json({ error: 'Invalid file type. Only real audio/video files are allowed.' });
     }
     next();
   } catch (err) {
@@ -80,8 +94,22 @@ const validateAudioUpload = async (req: any, res: any, next: any) => {
   }
 };
 
-router.post('/vision-ocr', requireAuth, solverCriticRateLimiter, upload.single('image'), validateImageUpload, handleVisionOCR);
-router.post('/voice-transcribe', requireAuth, solverCriticRateLimiter, diskUpload.single('audio'), validateAudioUpload, handleVoiceTranscribe);
+router.post(
+  '/vision-ocr',
+  requireAuth,
+  solverCriticRateLimiter,
+  upload.single('image'),
+  validateImageUpload,
+  handleVisionOCR,
+);
+router.post(
+  '/voice-transcribe',
+  requireAuth,
+  solverCriticRateLimiter,
+  diskUpload.single('audio'),
+  validateAudioUpload,
+  handleVoiceTranscribe,
+);
 router.post('/text-to-speech', requireAuth, solverCriticRateLimiter, handleTextToSpeech);
 router.use('/db', requireAuth, dbRoutes);
 router.use('/admin', adminRoutes);

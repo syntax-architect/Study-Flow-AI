@@ -1,4 +1,5 @@
-export type TabType = 'hub' | 'chat' | 'vault' | 'analytics' | 'review' | 'intervention' | 'study-room';
+export type TabType =
+  'hub' | 'chat' | 'vault' | 'analytics' | 'review' | 'intervention' | 'study-room';
 
 export interface ChatMessage {
   id: string;
