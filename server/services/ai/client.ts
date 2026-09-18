@@ -350,7 +350,7 @@ export class AiClient {
 
       const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
       const fallbackModel =
-        fallbackProvider === 'groq' ? 'llama-3.1-70b-versatile' : 'google/gemini-2.0-flash-001';
+        fallbackProvider === 'groq' ? 'openai/gpt-oss-20b' : 'google/gemini-2.0-flash-001';
       logger.warn(
         `[AI Engine] Falling back to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'default'}...`,
       );
@@ -501,7 +501,7 @@ export class AiClient {
             apiKey: fallbackKey,
             baseURL: config.groqBaseUrl,
           });
-          const groqModelToUse = 'llama-3.1-70b-versatile';
+          const groqModelToUse = 'openai/gpt-oss-20b';
           logger.info(
             `[AI Engine] Attempting generation with Fallback API ${i + 1} (${groqModelToUse})...`,
           );
@@ -610,7 +610,7 @@ export class AiClient {
 
       const fallbackProvider = provider.toLowerCase() === 'openrouter' ? 'groq' : 'openrouter';
       const fallbackModel =
-        fallbackProvider === 'groq' ? 'llama-3.1-70b-versatile' : 'google/gemini-2.0-flash-001';
+        fallbackProvider === 'groq' ? 'openai/gpt-oss-20b' : 'google/gemini-2.0-flash-001';
       logger.warn(
         `[AI Engine] Falling back stream to secondary provider ${fallbackProvider} (${fallbackModel}) for ${endpoint || 'conversation'}...`,
       );
@@ -678,7 +678,7 @@ export class AiClient {
             apiKey: fallbackKey,
             baseURL: config.groqBaseUrl,
           });
-          const groqModelToUseStream = 'llama-3.1-70b-versatile';
+          const groqModelToUseStream = 'openai/gpt-oss-20b';
           logger.info(
             `[AI Engine] Attempting stream with Fallback API ${i + 1} (${groqModelToUseStream})...`,
           );

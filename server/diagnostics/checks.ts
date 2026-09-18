@@ -234,7 +234,7 @@ export const checkTertiaryGroq = () =>
     'Tertiary Groq Fallback',
     config.fallbackApiKeys[0] || '',
     'https://api.groq.com/openai/v1',
-    'llama-3.1-70b-versatile',
+    'openai/gpt-oss-20b',
     'Tertiary Groq Fallback Provider',
   );
 
