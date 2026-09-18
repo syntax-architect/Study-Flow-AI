@@ -1,4 +1,6 @@
--- Run this SQL in your Supabase SQL Editor to create the necessary tables for Chat History
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS public.users (
     id TEXT PRIMARY KEY,
@@ -424,3 +426,23 @@ CREATE POLICY "Service role can read waitlist" ON public.waitlist
     FOR SELECT TO service_role USING (true);
 
 GRANT ALL ON public.waitlist TO anon, authenticated;
+
+-- ==========================================
+-- Diagnostics Log Setup
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.diagnostics_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    status TEXT NOT NULL,
+    message TEXT
+);
+
+ALTER TABLE public.diagnostics_log ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Service role can manage diagnostics log" ON public.diagnostics_log;
+CREATE POLICY "Service role can manage diagnostics log" 
+ON public.diagnostics_log 
+FOR ALL 
+TO service_role 
+USING (true) 
+WITH CHECK (true);
