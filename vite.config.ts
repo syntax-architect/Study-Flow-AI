@@ -6,7 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
-    envPrefix: ['VITE_', 'PUBLIC_', 'CLERK_'],
+    envPrefix: ['VITE_', 'PUBLIC_', 'CLERK_', 'NEXT_PUBLIC_'],
     plugins: [
       react(), 
       tailwindcss(),

@@ -9,6 +9,7 @@ import './index.css';
 // Import your publishable key (Vercel sometimes blocks VITE_ prefix, so we allow PUBLIC_ and CLERK_ as well)
 const PUBLISHABLE_KEY =
   (import.meta as any).env.VITE_CLERK_PUBLISHABLE_KEY ||
+  (import.meta as any).env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
   (import.meta as any).env.PUBLIC_CLERK_PUBLISHABLE_KEY ||
   (import.meta as any).env.CLERK_PUBLISHABLE_KEY;
 
